@@ -42,13 +42,16 @@
 # 2016/03/23 Fixed plotting bug in RDBE_check. Added choice of TECU model    #
 # 2016/04/06 Added weightit=3 and aparm(7)=10 in fringegeo, changed delay    #
 #            error for SX geoblocks to 3.                                    #
-# 2016/09/07 Changed delay window in manual phasecal#
-# 2017/11/13 Added LBA apcal, various corrections for LBA data
-# 2018/08/27 Added YG flag in make station_file.inp
-# 2019/06/20 Removed fringecal RR/LL averaging
+# 2016/09/07 Changed delay window in manual phasecal                         #
+# 2017/11/13 Added LBA apcal, various corrections for LBA data               #
+# 2018/08/27 Added YG flag in make station_file.inp                          #
+# 2019/06/20 Removed fringecal RR/LL averaging                               #
+# 2020/02/24 Added extra vlaglu for 8IF cont data - LJH                      #
+# 2020/03/30 Changed runpang and runpang2 to not run on HB/KE linears        #
+# 2020/10/03 Removed setjy.optype='VCAL' from runcvel_lba - LJH              #
 ##############################################################################
 
-version_date='2016/09/07'
+version_date='2020/10/03'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -249,20 +252,14 @@ def get_TEC(year,doy,TECU_model):
         doy='0'+str(doy)
     else:
         doy=str(doy)
-
     name=TECU_model+doy+'0.'+year+'i'
-#    name4='esag'+doy+'0.'+year+'i'
-#    if os.path.exists(name) or os.path.exists(name2):
     if os.path.exists(name):
         print 'File already there.'
     else:
         path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
         os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
         os.popen(r'uncompress -f '+name+'.Z')
-#        if os.path.exists(name+'.Z'):
-#            os.popen(r'rm '+name+'.Z')
-#            os.popen(r'wget -t 30 -O '+name2+'.Z '+path+name2+'.Z')
-#            os.popen(r'uncompress -f '+name2+'.Z')
+
 def check_geo(indata):
     nx_table = indata.table('AIPS NX', 0)
     n_block  = 1
@@ -287,12 +284,9 @@ def runTECOR(indata,year,doy,num_days,gainuse,TECU_model):
     else:
         doy=str(doy)
     name=TECU_model+doy+'0.'+year+'i'
-#    name2='codg'+doy+'0.'+year+'i'
     tecor = AIPSTask('TECOR')
     if os.path.exists(name):
         tecor.infile='PWD:'+name
-#    elif os.path.exists(name2):
-#        tecor.infile='PWD:'+name2
     tecor.indata=indata
     tecor.nfiles=num_days
     tecor.gainuse = gainuse
@@ -306,11 +300,6 @@ def get_eop(eop_path):
     if os.path.exists(eop_path+'usno_finals.erp'):
         age = (time.time() - os.stat(eop_path+'usno_finals.erp')[8])/3600
         mprint('usno_finals.erp exists, not downloaded.',logfile)
-        #if age<12: pass
-        #else:
-        #    os.popen(r'wget http://gemini.gsfc.nasa.gov/solve_save/usno_finals.erp')
-        #    os.popen(r' rm -rf '+eop_path+'usno_finals.erp')
-        #    os.popen(r'mv usno_finals.erp '+eop_path)
     else:
         os.popen(r'wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp')   # http://gemini.gsfc.nasa.gov/solve_save ftp://ftp.lbo.us/pub/staff/wbrisken/EOP
         os.popen(r'wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp')
@@ -567,21 +556,15 @@ def testfringe(indata, refant, flag, logfile):
     fringe.dparm[8]    = 1
     fringe.dparm[4]    = 0
     fringe.snver       = 2
-
     a = indata.sources
     bt = check_geo(indata)
     nb = len(bt)-1
-
     if (flag==1 and nb>2):
-
         time1 = bt[1]
         time2 = bt[nb-1]
-
         (day1,hour1,min1,sec1)=time_to_hhmmss(time1)
         (day2,hour2,min2,sec2)=time_to_hhmmss(time2)
-
         fringe.timerang[1:] = [day1, hour1, min1, sec1, day2, hour2, min2, sec2]
-
         mprint('#################################',logfile)
         mprint('TIMERANGE: '+str(day1)+' '+str(hour1)+' '+str(min1)+
                ' '+str(sec1)+' '+str(day2)+' '+str(hour2)+' '
@@ -591,7 +574,6 @@ def testfringe(indata, refant, flag, logfile):
         mprint('#################################',logfile)
         mprint('Whole Timerange',logfile)
         mprint('#################################',logfile)
-
     fringe()
 
 ##############################################################################
@@ -683,7 +665,6 @@ def get_best_scan(indata, logfile, qualfile, do_write):
     naxis    = indata.header['naxis']
     sources  = get_sources(indata)
 
-
     t   = [0]
     qf  = [0]
     snr = []
@@ -759,10 +740,6 @@ def get_best_scan(indata, logfile, qualfile, do_write):
                 if t[n]>max_sol:
                     max_sol=t[n]
                     id=n
-
-#    for i in range(len(t)):
-#        print sources[sid[i]-1],'Sol: ',t[i], 'QF: ',max(1/(qf[i]-0.00001),0), tr[i]
-#    print 'Max sol:',max_sol
 
     if do_write==1:
         file = './'+qualfile
@@ -2237,9 +2214,11 @@ def runpang(indata):
     pang.opcode       = 'PANG'
     pang.clcorprm[1:] = [1,0]
     antennas          = []
+    # the next bit is to deal with HB,KE,YG being linear
     for row in indata.table('AN', 0):
         if row['mntsta']==0:
-            antennas.append(row['nosta'])
+            if not row['anname'].replace(' ','') in ('HB','KE'):
+                antennas.append(row['nosta'])
     pang.antennas[1:] = antennas
     pang()
 
@@ -2253,9 +2232,11 @@ def runpang2(indata):
     pang.opcode  = 'PANG'
     pang.clcorprm[1:] = [1,0]
     antennas          = []
+    # the next bit is to deal with HB,KE,YG being linear
     for row in indata.table('AN', 0):
         if row['mntsta']==0:
-            antennas.append(row['nosta'])
+            if not row['anname'].replace(' ','') in ('HB','KE'):
+                antennas.append(row['nosta'])
     pang.antennas[1:] = antennas
     pang()
 
@@ -2326,14 +2307,14 @@ def runapcal_lba(indata, snver, inver, outver):
     ant             = get_ant(indata)
     check_sncl(indata, snver, inver, logfile)
     for i in ant:
-            clcor           = AIPSTask('CLCOR')
-            clcor.opcode    = 'GAIN'
-            clcor.indata    = indata
-            clcor.gainver   = 0
-            clcor.gainuse   = outver
-            clcor.antenna[1:] = [i]
-            clcor.clcorprm[1] = sqrtsefd[ant[i]]
-            clcor.go()
+        clcor             = AIPSTask('CLCOR')
+        clcor.opcode      = 'GAIN'
+        clcor.indata      = indata
+        clcor.gainver     = 0
+        clcor.gainuse     = outver
+        clcor.antenna[1:] = [i]
+        clcor.clcorprm[1] = sqrtsefd[ant[i]]
+        clcor.go()
     return
 
 ##############################################################################
@@ -2345,7 +2326,6 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
         for source in indata.sources:
             if source[0]=='F':
                 mp_source.append(source)
-
     fringe            = AIPSTask('FRING')
     fringe.indata     = indata
     fringe.refant     = refant
@@ -2353,13 +2333,11 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
     fringe.solint     = 6
     fringe.bchan      = 0
     fringe.echan      = 0
-    fringe.aparm[1:]  = [2,0]
-    fringe.dparm[8]   = 1
-    fringe.dparm[2]   = 0
-    fringe.dparm[3]   = 0
+    fringe.aparm[1:]  =[2,0]
     fringe.dparm[2]   = 250
     fringe.dparm[3]   = 50
     fringe.dparm[4]   = dpfour
+    fringe.dparm[8]   = 1
     fringe.snver      = 0
     fringe.calso[1:]  = mp_source
 #    fringe.inputs()
@@ -2952,7 +2930,7 @@ def runcvel_lba(indata, cvelsource, vel, inter_flag, doband, bpver):
     setjy.indata = indata
     setjy.source[1:] = cvelsource
     setjy.restfreq[1:] = restfreq
-    setjy.optype = 'VCAL'
+    #setjy.optype = 'VCAL'
     setjy.veltyp = 'LSR'
     setjy.veldef = 'RADIO'
     channum = indata.header['naxis'][2]
@@ -3397,20 +3375,29 @@ def run_snplt(indata, inter_flag):
     snplt.inext   = 'SN'
     snplt.optype  = 'PHAS'
     snplt.nplots  = n_ant
+    snplt.pixrange[1:] = [-200,200]
     snplt.bif     = 1
     snplt.eif     = 1
     snplt.dotv    = -1
     snplt()
 
-    name=indata.name+'_sn4.ps'
+    snplt.stokes  = 'DIFF'
+    snplt()
 
-    if os.path.exists(name):
-        os.popen('rm '+name)
+    name1=indata.name+'_sn4.ps'
+    name2=indata.name+'_diffsn4.ps'
+
+    if os.path.exists(name1):os.popen('rm '+name1)
+    if os.path.exists(name2):os.popen('rm '+name2)
 
     lwpla         = AIPSTask('LWPLA')
     lwpla.indata  = indata
-    lwpla.inver   = 0
-    lwpla.outfile = 'PWD:'+name
+    lwpla.inver   = 1
+    lwpla.outfile = 'PWD:'+name1
+    lwpla()
+
+    lwpla.inver   = 2
+    lwpla.outfile = 'PWD:'+name2
     lwpla()
 
     if inter_flag==1:
@@ -3424,7 +3411,7 @@ def run_snplt(indata, inter_flag):
             snplt.dotv        = 1
             snplt()
         else:
-            os.popen('gv '+name)
+            os.popen('gv '+name1)
 
     indata.zap_table('PL', -1)
 
@@ -5578,7 +5565,14 @@ if print_sn_flag==1:
         mprint(get_time(),logfile)
         mprint('######################',logfile)
 
-if co_imagr_flag==1:
+
+def _zapbeam(source):
+    beam=AIPSImage(source,'IBM001',1,1)
+    if beam.exists():
+        beam.zap()
+
+
+if co_imagr_flag==1:   
 
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
 
@@ -5587,6 +5581,7 @@ if co_imagr_flag==1:
          if split_data.exists():
              runimagr(split_data, source, niter, cellsize, imsize, -1, imna,
                       antennas, uvwtfn, robust,beam)
+             _zapbeam(source)
 
 if ma_imagr_flag==1:
 
@@ -5599,6 +5594,7 @@ if ma_imagr_flag==1:
                  split_data.rename(split_data.name[0:8],split_data.klass,split_data.seq)
              runmaimagr(split_data, source, niter, cellsize, imsize,channel,
                         -1, imna, uvwtfn, robust, beam)
+             _zapbeam(split_data.name[0:8])
 
 if cube_imagr_flag==1:
 

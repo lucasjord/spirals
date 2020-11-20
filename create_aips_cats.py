@@ -16,34 +16,29 @@ import scipy.io as sio
 ###################################################
 
 def main():
-    dogeo  = 0
-    docont = 0 
+    dogeo  = 1
+    docont = 1
     doline = 1
 
-    AIPS.userno = 2550+330+1
-    EXPERIMENT  = "V255AG"
+    AIPS.userno = 280+13+1
+    EXPERIMENT  = "S001D"
     EXPCLASS    = "UVDATA"
     EXPSEQ      = 1
     EXPDISK     = 1
-    file_path = "/Users/Lucas/v255/v255ag/files/" 
+    file_path   = "/home/observer/analysis/s001d/files/"
 
-    n = 4 #number of files
-    #                     name         : spectral resolution fine=0.9766kHz, course=500kHz
-    file_catalogue =   {'v255ag-cont'  : 'course',
-    				    'v255ag-l1p0'  : 'fine',
-                        'v255ag-l1p1'  : 'fine',
-                        'v255ag-l2'    : 'fine2'}
+    n = 2 #number of files
+    #                     name         : spectral resolution fine=0.9766kHz, coarse=500kHz
+    file_catalogue =   {'s001d-cont'  : 'coarse',
+    	                's001d-line'  : 'fine'}
 
-    data_names     =   {'v255ag-cont'  : 'V255AG.CONT.FITS',
-                        'v255ag-l1p0'  : 'V255AG.LINE1.P0.FITS',
-                        'v255ag-l1p1'  : 'V255AG.LINE1.P1.FITS',
-                        'v255ag-l2'    : 'V255AG.LINE2.FITS'}
-                      
+    data_names     =   {'s001d-cont'  : 's001d_lowres.fits',
+                        's001d-line'  : 's001d_hires.fits'}
     #
-    target_source       = ['G322.158+0.6']                #masers/target             [] => ALL G*/J*
-    target_calibrators  = ['J1509_G322','J1511_G322']                #phasereference quasars    [] => ALL G*/J*
-    correlation_key     = 'fine'            # correlation type to source from for spectra (ONLY RELEVANT FOR LINE DATA)
-    geoblock_timer      = [0]               #[0, 8, 0, 0, 0, 20, 10, 0]
+    target_source       = [] #['G232.62-0.99']                  #masers/target             [] => ALL G*/J*
+    target_calibrators  = [] #['J1725','J729','J1735','J1748']  #phasereference quasars    [] => ALL G*/J*
+    correlation_key     = 'fine'   # correlation type to source from for spectra (ONLY RELEVANT FOR LINE DATA)
+    geoblock_timer      = [0]      #[0, 8, 0, 0, 0, 20, 10, 0]
 
     file_names=[]
     for name in file_catalogue:
@@ -64,7 +59,7 @@ def main():
         print 'CREATING GEO FILE'
         for name in file_names:
             correlation_type=file_catalogue[name]
-            if not correlation_type=='course':
+            if not correlation_type=='coarse':
                 print name+' incorrect spectral type'
                 continue
             else:
@@ -94,7 +89,7 @@ def main():
         print 'CREATING CONTINUUM FILE'
         for name in file_names:
             correlation_type=file_catalogue[name]
-            if not correlation_type=='course':
+            if not correlation_type=='coarse':
                 print name+' incorrect spectral type'
                 continue
             else:
@@ -127,10 +122,10 @@ def main():
             print total_sources
             total_sources=remove_repeats(total_sources)
             all_cont_sources+=total_sources
-            if len(total_sources)>5:
+            if len(total_sources)>20:
                 for i in range(int(round(len(total_sources)/5.0))):
                     if not 5*i+5==len(total_sources):
-                        sublist=total_sources[5*i:5*i+5]
+                        sublist=total_sources[20*i:5*i+20]
                         load(file_path+data_names[name], EXPERIMENT+'_C', 'UVDATA', 1, 1, sublist, 1, 0)
             else:
                 load(file_path+data_names[name], EXPERIMENT+'_C', 'UVDATA', 1, 1, total_sources, 1, 0)
@@ -192,11 +187,11 @@ def main():
                         if not 20*i+20==len(total_sources):
                             sublist=total_sources[20*i:20*i+20]
                             print sublist
-                            load(file_path+data_names[name], EXPERIMENT+'_L', 'UVDATA', 1, 2, sublist, 1, 0)
+                            load(file_path+data_names[name], EXPERIMENT+'_L', 'UVDATA', 1, 1, sublist, 1, 0)
                 else:
-                    load(file_path+data_names[name], EXPERIMENT+'_L', 'UVDATA', 1, 2, total_sources, 1, 0)
-        sort(EXPERIMENT+'_L', 'UVDATA', 1, 2)
-        index(EXPERIMENT+'_L', 'UVDATA', 1, 2)
+                    load(file_path+data_names[name], EXPERIMENT+'_L', 'UVDATA', 1, 1, total_sources, 1, 0)
+        sort(EXPERIMENT+'_L', 'UVDATA', 1, 1)
+        index(EXPERIMENT+'_L', 'UVDATA', 1, 1)
         print 'CREATED SPECTRAL LINE FILE'   
     else:
         print 'NOT CREATING SPECTRAL LINE FILE'
