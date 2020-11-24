@@ -2909,7 +2909,7 @@ def runcvel(indata, cvelsource, vel, inter_flag, doband, bpver):
     indxr.indata = cveldata
     indxr()
 
-def runcvel_lba(indata, cvelsource, vel, inter_flag, doband, bpver):
+def runcvel_lba(indata, cvelsource, vel, inter_flag, doband, bpver, channel):
     #uvsort(indata)
     print 'Running CVEL.'
     if inter_flag==1:
@@ -2934,10 +2934,11 @@ def runcvel_lba(indata, cvelsource, vel, inter_flag, doband, bpver):
     setjy.veltyp = 'LSR'
     setjy.veldef = 'RADIO'
     channum = indata.header['naxis'][2]
-    setjy.aparm[1:] = [channum/2.+crpix[2],0]
+    setjy.aparm[1:] = [channel, 0]
+    #[channum/2.+crpix[2],0]
 
     for i in range(naxis[3]):
-        #setjy.sysvel     = vel[i]
+        setjy.sysvel     = vel[i]
         setjy.bif = i+1
         setjy.eif = i+1
         setjy()
