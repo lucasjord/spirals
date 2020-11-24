@@ -5386,7 +5386,7 @@ if cvel_flag==1:
     if not antname == 'LBA':
         runcvel(line_data,cvelsource,vel,inter_flag, doband, bpver)
     else:
-        runcvel_lba(line_data,cvelsource,vel,inter_flag, doband, bpver)
+        runcvel_lba(line_data,cvelsource,vel,inter_flag, doband, bpver, channel)
 
 if possm_flag==1:
     if refant_flag==1:
