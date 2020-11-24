@@ -51,7 +51,7 @@
 # 2020/10/03 Removed setjy.optype='VCAL' from runcvel_lba - LJH              #
 ##############################################################################
 
-version_date='2020/10/03'
+version_date='2020/11/24'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
