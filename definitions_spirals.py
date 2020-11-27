@@ -51,7 +51,7 @@
 # 2020/10/03 Removed setjy.optype='VCAL' from runcvel_lba - LJH              #
 ##############################################################################
 
-version_date='2020/11/24'
+version_date='2020/11/27'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -60,6 +60,8 @@ from Wizardry.AIPSData import AIPSUVData as WAIPSUVData
 import AIPSTV
 import AIPS, os, math, time
 from pylab import *
+
+#import pdb #debugger
 
 if 'aipsver' in locals() and globals(): AIPSTask.version = aipsver
 else: aipsver = AIPSTask.version
@@ -256,8 +258,10 @@ def get_TEC(year,doy,TECU_model):
     if os.path.exists(name):
         print 'File already there.'
     else:
-        path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
-        os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        #path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
+        path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
+        #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
         os.popen(r'uncompress -f '+name+'.Z')
 
 def check_geo(indata):
@@ -301,8 +305,8 @@ def get_eop(eop_path):
         age = (time.time() - os.stat(eop_path+'usno_finals.erp')[8])/3600
         mprint('usno_finals.erp exists, not downloaded.',logfile)
     else:
-        os.popen(r'wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp')   # http://gemini.gsfc.nasa.gov/solve_save ftp://ftp.lbo.us/pub/staff/wbrisken/EOP
-        os.popen(r'wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp')
+        os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp')   #wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp http://gemini.gsfc.nasa.gov/solve_save ftp://ftp.lbo.us/pub/staff/wbrisken/EOP
+        os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp')
         os.popen(r'mv usno500_finals.erp '+eop_path+'usno_finals2.erp')
         os.popen(r'mv usno_finals.erp '+eop_path+'usno_finals.erp')
 
@@ -4967,7 +4971,7 @@ if pr_prep_flag==1 or geo_prep_flag==1:
         num_days=get_num_days(data[pr_data_nr[0]])
 
     doy=get_day_of_year(year, month, day)
-
+    
     get_TEC(year,doy,TECU_model)
     get_eop(eop_path)
 
