@@ -49,9 +49,10 @@
 # 2020/02/24 Added extra vlaglu for 8IF cont data - LJH                      #
 # 2020/03/30 Changed runpang and runpang2 to not run on HB/KE linears        #
 # 2020/10/03 Removed setjy.optype='VCAL' from runcvel_lba - LJH              #
+# 2020/12/14 Added run_snplt_diff to track RR-LL phase drifts  - LJH         #
 ##############################################################################
 
-version_date='2020/11/27'
+version_date='2020/12/14'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -3386,14 +3387,14 @@ def run_snplt(indata, inter_flag):
     snplt.dotv    = -1
     snplt()
 
-    snplt.stokes  = 'DIFF'
-    snplt()
+    #snplt.stokes  = 'DIFF'
+    #snplt()
 
     name1=indata.name+'_sn4.ps'
-    name2=indata.name+'_diffsn4.ps'
+    #name2=indata.name+'_diffsn4.ps'
 
     if os.path.exists(name1):os.popen('rm '+name1)
-    if os.path.exists(name2):os.popen('rm '+name2)
+    #if os.path.exists(name2):os.popen('rm '+name2)
 
     lwpla         = AIPSTask('LWPLA')
     lwpla.indata  = indata
@@ -3401,7 +3402,49 @@ def run_snplt(indata, inter_flag):
     lwpla.outfile = 'PWD:'+name1
     lwpla()
 
-    lwpla.inver   = 2
+    #lwpla.inver   = 2
+    #lwpla.outfile = 'PWD:'+name2
+    #lwpla()
+
+    if inter_flag==1:
+        tv=AIPSTV.AIPSTV()
+        if tv.exists()==False:
+            tv.start()
+        if tv.exists():
+            tv.clear()
+
+        if AIPSTV.AIPSTV().exists():
+            snplt.dotv        = 1
+            snplt()
+        else:
+            os.popen('gv '+name1)
+
+    indata.zap_table('PL', -1)
+
+def run_snplt_diff(indata, inter_flag):
+
+    indata.zap_table('PL', -1)
+    n_ant         = len(get_ant(indata))
+    snplt         = AIPSTask('SNPLT')
+    snplt.indata  = indata
+    snplt.stokes  = 'DIFF'
+    snplt.inver   = 4
+    snplt.inext   = 'SN'
+    snplt.optype  = 'PHAS'
+    snplt.nplots  = n_ant
+    snplt.pixrange[1:] = [-200,200]
+    snplt.bif     = 1
+    snplt.eif     = 1
+    snplt.dotv    = -1
+    snplt()
+
+    name2=indata.name+'_diffsn4.ps'
+
+    if os.path.exists(name2):os.popen('rm '+name2)
+
+    lwpla         = AIPSTask('LWPLA')
+    lwpla.indata  = indata
+    lwpla.inver   = 1
     lwpla.outfile = 'PWD:'+name2
     lwpla()
 
@@ -5449,6 +5492,7 @@ if ma_fringe_flag==1 and line != cont:
         run_elvflag(cont_data,min_elv,logfile)
     runclcal(cont_data, 4, 7, 8, '', 1, refant)
     run_snplt(line_used, inter_flag)
+    run_snplt_diff(line_used, inter_flag)
 
     mprint('######################',logfile)
     mprint(get_time(),logfile)
