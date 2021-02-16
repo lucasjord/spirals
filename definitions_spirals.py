@@ -50,9 +50,11 @@
 # 2020/03/30 Changed runpang and runpang2 to not run on HB/KE linears        #
 # 2020/10/03 Removed setjy.optype='VCAL' from runcvel_lba - LJH              #
 # 2020/12/14 Added run_snplt_diff to track RR-LL phase drifts  - LJH         #
+# 2021/01/12 Reversed runpang & runpang2 changes from 2020/03/30             #
+#            Edited bug in mafringe for short source names  - LJH            #
 ##############################################################################
 
-version_date='2020/12/14'
+version_date='2021/01/12'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -2218,13 +2220,13 @@ def runpang(indata):
     pang.gainuse      = 4
     pang.opcode       = 'PANG'
     pang.clcorprm[1:] = [1,0]
-    antennas          = []
+    #antennas          = []
     # the next bit is to deal with HB,KE,YG being linear
-    for row in indata.table('AN', 0):
-        if row['mntsta']==0:
-            if not row['anname'].replace(' ','') in ('HB','KE'):
-                antennas.append(row['nosta'])
-    pang.antennas[1:] = antennas
+    #for row in indata.table('AN', 0):
+    #    if row['mntsta']==0:
+    #        if not row['anname'].replace(' ','') in ('HB','KE'):
+    #            antennas.append(row['nosta'])
+    #pang.antennas[1:] = antennas
     pang()
 
 ##############################################################################
@@ -2236,13 +2238,13 @@ def runpang2(indata):
     pang.gainuse = 4
     pang.opcode  = 'PANG'
     pang.clcorprm[1:] = [1,0]
-    antennas          = []
+    #antennas          = []
     # the next bit is to deal with HB,KE,YG being linear
-    for row in indata.table('AN', 0):
-        if row['mntsta']==0:
-            if not row['anname'].replace(' ','') in ('HB','KE'):
-                antennas.append(row['nosta'])
-    pang.antennas[1:] = antennas
+    #for row in indata.table('AN', 0):
+    #    if row['mntsta']==0:
+    #        if not row['anname'].replace(' ','') in ('HB','KE'):
+    #            antennas.append(row['nosta'])
+    #pang.antennas[1:] = antennas
     pang()
 
 ##############################################################################
@@ -2645,8 +2647,8 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk, doband, bpve
         splitdata.zap()
     split()
 
-    if len(calsource)>=8:
-        reducedname = calsource[0:8]
+    if len(calsource)>=4:
+        reducedname = calsource[0:4]
     else:
         reducedname = calsource
 
@@ -2753,7 +2755,7 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
     if fr_image.exists():
         fringe.in2data = fr_image
         mprint('################################################',logfile)
-        mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on diks '+str(int(fringe.in2disk)), logfile)
+        mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on disk '+str(int(fringe.in2disk)), logfile)
         mprint('################################################',logfile)
     else:
         mprint('################################################',logfile)
