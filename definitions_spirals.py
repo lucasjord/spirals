@@ -52,6 +52,8 @@
 # 2020/12/14 Added run_snplt_diff to track RR-LL phase drifts  - LJH         #
 # 2021/01/12 Reversed runpang & runpang2 changes from 2020/03/30             #
 #            Edited bug in mafringe for short source names  - LJH            #
+# 2021/03/19 Changed cvel to use input or middle channel of band, now        #
+#            seperate channel to fringe fitting - LJH                        #
 ##############################################################################
 
 version_date='2021/01/12'
