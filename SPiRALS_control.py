@@ -72,7 +72,7 @@ line        =  2                  # data file with line data?
                                   # if you have only one dataset, use cont = line
 
 cvelsource  = ['maser']           #  line sources '' => calsource
-velchan     = [1001]              #  channel used for cvel, default []=>Nchan/2+1
+velchan     = 1001              #  channel used for cvel, default 0=>Nchan/2+1
 vel         = [666.]              #  Velocity for cvel in band center
 
 channel     = 69                  # channel used for fringe fit after cvel
