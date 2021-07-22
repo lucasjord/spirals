@@ -165,9 +165,10 @@ def main():
     x_off2 = (x*snr**2).sum()/((snr**2).sum())
     y_off2 = (y*snr**2).sum()/((snr**2).sum())
 
-    print("Shift is ra={0:+6.4f}, dec={1:+6.4f}".format(-x_off2, -y_off2))
-    print("Add shift as given to maser pos_shift")
-
+    print('\n#############################################\n')
+    print("    Shift is ra={0:+6.4f}, dec={1:+6.4f}".format(-x_off2, -y_off2))
+    print("    Add shift as given to maser pos_shift")
+    print('\n#############################################\n')
 
 ###################################################
 ### AIPS TASKS DEFINITIONS
