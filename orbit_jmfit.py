@@ -130,7 +130,7 @@ def main():
         if AIPSImage(cal_split.name,"ILC001",1,args.seq).exists():
             if args.verbosity>0: print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
             AIPSImage(cal_split.name,"ILC001",1,args.seq).zap()
-        _image(cal_split,args.gain,args.niter,args.cell,args.imsize,args.seq)
+        _image(cal_split,args.niter,args.gain,args.cell,args.imsize,args.seq)
         if not args.nozap>0: _zapbeam(cal_split.name,args.seq)
     
 
