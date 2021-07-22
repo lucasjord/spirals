@@ -62,14 +62,14 @@ def main():
     for ftype in ["_G","_C","_L"]:
         for expclass in ["UVDATA"]:
             for disk in range(3):
-                for seq in range(3):
-                    indata = AIPSUVData(args.experiment+ftype,expclass,disk,seq)
+                for seq in range(2):
+                    indata = AIPSUVData(args.experiment+ftype,expclass,disk+1,seq+1)
                     if indata.exists(): 
-                        #if arg.verbosity>0: print(f"Found file {args.experiment+ftype}.{expclass}.{disk}.{seq}")
+                        if arg.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
                         success = success + 1
                         break
                     else: 
-                        #if arg.verbosity>1: print(f"Did not find file {args.experiment+ftype}.{expclass}.{disk}.{seq}")
+                        if arg.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
                         continue
     if success<=0: sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment,args.aipsid))
     else: 
