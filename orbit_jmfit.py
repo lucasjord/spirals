@@ -61,7 +61,7 @@ def main():
     success = 0
     for ftype in ["_G","_C","_L"]:
         for expclass in ["UVDATA"]:
-            for disk in range(3):
+            for disk in range(len(AIPS.disks)-1):
                 for seq in range(2):
                     indata = AIPSUVData(args.experiment+ftype,expclass,disk+1,seq+1)
                     if indata.exists(): 
