@@ -14,6 +14,7 @@
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
 from AIPSData import AIPSUVData, AIPSImage
+from Wizardry.AIPSData import AIPSUVData as WAIPSUVData, AIPSImage as WAIPSImage
 import numpy as np
 import os, pdb, sys, argparse
 
@@ -30,9 +31,29 @@ def main():
     parser.add_argument('aipsid',
                         help='AIPS USERID e.g. 666. Between 1-46656',
                         type=int)
+    parser.add_argument('-g','--gain',
+                        help='CLEAN loop gain, 0-1',
+                        type=float,default=0.3)
+    parser.add_argument('-n','--niter'
+                        help='Number of CLEAN iterations',
+                        type=int,default=200)
+    parser.add_argument('-c','--cell'
+                        help='Pixel size in image grid, units arcsec',
+                        type=float,default=0.0001)
+    parser.add_argument('-i','--imsize'
+                        help='Image size in pixels',
+                        type=int,default=1024)
+    parser.add_argument('-q','--seq'
+                        help='Sequence of created images. Default 99. Will overwrite <seq> images if they exist.',
+                        type=int,default=99)
+    parser.add_argument('-z','--nozap'
+                        help='Zap beam files? Enable to NOT delte the beams.',
+                        type=count,default=0)
+
     args = parser.parse_args()
 
     AIPS.userno = args.aipsid
+
 
     '''
         First check whether experiment exists in AIPS at given AIPS USER#
@@ -55,6 +76,7 @@ def main():
         if arg.verbosity>0: print('Found files in {}, continuing...'.format(args.aipsid))
         pass
     
+
     '''
         Check whether data has been calibrated sufficiently
     '''
@@ -71,7 +93,8 @@ def main():
     try:
         check_sncl(indata,8,4)
     except RuntimeError:
-        sys.exit(f'Data is not calibrated sufficiently for this step CL>=8, SN>=4 required')
+        sys.exit('Data is not calibrated sufficiently for this step CL>=8, SN>=4 required')
+
 
     '''
         Now we need to identify matching source names. Will assume J=calibrator and G=target
@@ -80,53 +103,90 @@ def main():
     if arg.verbosity>0: print('Found {} calibrators.'.format(len(calibrators)))
     if arg.verbosity>1: print('Calibrators: {}'.format(calibrators))
     targets     = [s for s in indata.sources if "G" in s]
-    if len(targets)>1: sys.exit('More than one target found, targets: {}'.format(targets))
+    if len(targets)>1: sys.exit('More than one possible target found, targets: {}'.format(targets))
     target     = targets[-1]
     if arg.verbosity>0: print('Found target {}'.format(target))
+    
+
     '''
         Now look for SPLIT catalogue entries. They should be in disk 1
     '''
     cdata = []   
     for i in range(len(calibrators)):
-        cdata.append(AIPSUVData(calibrators[i],'SPLIT',1,1))
+        if AIPSUVData(calibrators[i],'SPLIT',1,1).exists():
+            #if arg.verbosity>0: print('Found file {}.SPLIT.1.1'.format(calibrators[i]))
+            cdata.append(AIPSUVData(calibrators[i],'SPLIT',1,1))
+        else:
+            print('Could not find catalogue {}.SPLIT.1.1'.format(calibrators[i]))
 
-    for i in orbits_of_interest:
-        sources = [middle_sources[i]]+orbit_sources[i]
-        if do_del==1:
-            for k in range(len(sources)):
-                _zapimage(sources[k],1)
-                _zapimage(sources[k],2)
-                _zapimage(sources[k],3)
-                _zapimage(sources[k],4)
-                _zapimage(sources[k],5)
-                _zapimage(sources[k],6)
-                _zapimage(sources[k],7)
-                _zapimage(sources[k],8)
-                _zapimage(sources[k],9)
-                _zapimage(sources[k],10)
 
-    if do_image1==1:
-        for i in orbits_of_interest:
-            sources = [middle_sources[i]]+orbit_sources[i]
-            for j in range(len(orbit_sources[i])):
-                _image(middle_sources[i],orbit_sources[i][j],2)
-                _zapbeam(orbit_sources[i][j])
-            _image(middle_sources[i],middle_sources[i],2)
-            _zapbeam(middle_sources[i])
+    '''
+        For each valid split file, we are going to image it.
+    '''
+    for cal_split in cdata:
+        if AIPSImage(cal_split.name,'ILC001',1,args.seq).exists():
+            if arg.verbosity>0: print('Deleting old image {}.ILC001.1.{}'.format(cal_split.name,args.seq))
+            AIPSImage(cal_split.name,'ILC001',1,args.seq).zap()
+        _image(cal_split,args.gain,args.niter,args.cell,args.imsize,args.seq)
+        _zapbeam(cal_split.name,args.seq)
+    
 
-    if do_jmfit==1:
-        for i in orbits_of_interest:        
-            sources = [middle_sources[i]]+orbit_sources[i]
-            for inseq in range(3):
-                fitout = './phases/'+middle_sources[i]+'_'+str(inseq+1)+'.jmfit'
-                if os.path.exists(fitout): 
-                    os.remove(fitout)
-                for source in sources:
-                    _jmfit(inname=source,inseq=inseq+1,fitout=fitout)
+    '''
+        Now to look for peaks in the emission, store values and RMS.
+        We will be using Wizardry instead of JMFIT
+    '''
+
+    X, Y  = np.meshgrid(np.arange(1,args.imsize+.5,1),np.arange(1,args.imsize+.5,1))
+    x   = np.zeros(shape=(len(cdata),))
+    y   = np.zeros(shape=(len(cdata),))
+    snr = np.zeros(shape=(len(cdata),))
+    i=-1
+    for cal_split in cdata:
+        i=i+1
+        if AIPSImage(cal_split.name,'ICL001',1,args.seq).exists(): wim = WAIPSImage(cal_split.name,'ICL001',1,args.seq)
+        else: continue
+        wim.squeeze()
+        rms = 3*wim.pixels.std()
+        if rms>wim.header.datamax: continue
+        ew  = (X-wim.header.crpix[0])*-1e-4
+        ns  = (Y-wim.header.crpix[1])*+1e-4     
+        ind = np.where(wim.pixels==wim.header.datamax)
+        snr[i] = wim.header.datamax/rms
+        x[i]   = ew[ind]
+        y[i]   = ns[ind]
+    
+    x_off1 = (x*snr**1).sum()/((snr**1).sum())
+    y_off1 = (y*snr**1).sum()/((snr**1).sum())
+
+    x_off2 = (x*snr**2).sum()/((snr**2).sum())
+    y_off2 = (y*snr**2).sum()/((snr**2).sum())
+
+    print('Shift is ra={0:+6.4f}, dec={1:+6.4f}'.format(-x_off2, -y_off2))
+    print('Add shift as given to maser pos_shift')
+
 
 ###################################################
 ### AIPS TASKS DEFINITIONS
 ###################################################
+
+def _image(indata,niter=200,gain=0.3,cell=1.0e-4,imsize=1024,seq=99):
+    imagr            = AIPSTask('imagr')
+    imagr.default
+    imagr.indata     = indata
+    imagr.docalib    = -1
+    imagr.outseq     = seq
+    imagr.outname    = indata.name
+    imagr.cell[1:]   = [cell,cell]
+    imagr.imsize[1:] = [imsize,imsize]
+    imagr.gain       = gain
+    imagr.niter      = niter
+    imagr.dotv       = -1
+    imagr()
+
+def _zapbeam(inname,seq=99):
+    beam=AIPSImage(inname,'IBM001',1,seq)
+    if beam.exists():
+        beam.zap()
 
 def check_sncl(indata,sn,cl):
     if (indata.table_highver('AIPS CL')>=cl and
@@ -174,40 +234,6 @@ def check_sncl(indata,sn,cl):
         while indata.table_highver('AIPS SN')>sn:
             indata.zap_table('AIPS SN', 0)
 
-def _zapimage(source,inseq):
-    img=AIPSImage(source,'ICL001',1,inseq)
-    if img.exists():
-        img.zap()
-
-def _zapbeam(source):
-    beam=AIPSImage(source,'IBM001',1,1)
-    if beam.exists():
-        beam.zap()
-
-def _image(midsource,source,Gin):
-    imagr=AIPSTask('imagr')
-    imagr.default
-    imagr.inname=midsource
-    imagr.source[1]=source
-    imagr.inclass='RING'
-    imagr.inseq=2
-    imagr.indisk=1
-    imagr.docalib=1
-    imagr.gainu=Gin
-    imagr.outseq=0
-    #imagr.bmaj=1.6e-3
-    #imagr.bmin=1.6e-3
-    #imagr.nbox=1
-    #imagr.clbox[1][1:]=[108,108,148,148]
-    imagr.antenna[1:]= array
-    imagr.baseline[1:]=array
-    imagr.outname=source
-    imagr.cell[1:]=[0.5e-4,0.5e-4]
-    imagr.imsize[1:]=[512,512]
-    imagr.gain=0.3
-    imagr.niter=200
-    imagr.dotv=-1
-    imagr()
 
 ###################################################
 ###################################################
@@ -218,20 +244,6 @@ def get_file(path):
     f=open(fopen, 'r+')
     g=list(map(lambda s: s.strip(), list(f)))
     return np.array(g)
-
-def get_experiment():
-    files = os.listdir('./')
-    reffile=0
-    for i in range(len(files)):
-        if "LST" in files[i]:
-            reffile = files[i]
-            break
-    if reffile==0:
-        sys.exit('No AIPS output file to read from')
-    readfile = get_file(reffile)
-    aipsid   = readfile[0].split()[2]
-    experiment = readfile[1].split()[2]
-    return int(aipsid), experiment
 
 ###################################################
 ###################################################
