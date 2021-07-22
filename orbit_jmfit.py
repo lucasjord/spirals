@@ -65,15 +65,15 @@ def main():
                 for seq in range(2):
                     indata = AIPSUVData(args.experiment+ftype,expclass,disk+1,seq+1)
                     if indata.exists(): 
-                        if arg.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
+                        if args.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
                         success = success + 1
                         break
                     else: 
-                        if arg.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
+                        if args.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
                         continue
     if success<=0: sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment,args.aipsid))
     else: 
-        if arg.verbosity>0: print("Found files in {}, continuing...".format(args.aipsid))
+        if args.verbosity>0: print("Found files in {}, continuing...".format(args.aipsid))
         pass
     
 
@@ -81,11 +81,11 @@ def main():
         Check whether data has been calibrated sufficiently
     '''
     if AIPSUVData(args.experiment+"_L","UVDATA",1,2).exists():
-        if arg.verbosity>0: print("Found file {}.UVDATA.1.2".format(args.experiment+"_L"))
+        if args.verbosity>0: print("Found file {}.UVDATA.1.2".format(args.experiment+"_L"))
         indata = AIPSUVData(args.experiment+"_L","UVDATA",1,2)
 
     elif AIPSUVData(args.experiment+"_L","UVDATA",2,2).exists():
-        if arg.verbosity>0: print("Found file {}.UVDATA.2.2".format(args.experiment+"_L"))
+        if args.verbosity>0: print("Found file {}.UVDATA.2.2".format(args.experiment+"_L"))
         indata = AIPSUVData(args.experiment+"_L","UVDATA",2,2)
 
     else: sys.exit("Cannot find CVELed data {}.UVDATA.*.2".format(args.experiment+"_L"))
@@ -100,12 +100,12 @@ def main():
         Now we need to identify matching source names. Will assume J=calibrator and G=target
     '''
     calibrators = [s for s in indata.sources if "J" in s]
-    if arg.verbosity>0: print("Found {} calibrators.".format(len(calibrators)))
-    if arg.verbosity>1: print("Calibrators: {}".format(calibrators))
+    if args.verbosity>0: print("Found {} calibrators.".format(len(calibrators)))
+    if args.verbosity>1: print("Calibrators: {}".format(calibrators))
     targets     = [s for s in indata.sources if "G" in s]
     if len(targets)>1: sys.exit("More than one possible target found, targets: {}".format(targets))
     target     = targets[-1]
-    if arg.verbosity>0: print("Found target {}".format(target))
+    if args.verbosity>0: print("Found target {}".format(target))
     
 
     '''
@@ -114,7 +114,7 @@ def main():
     cdata = []   
     for i in range(len(calibrators)):
         if AIPSUVData(calibrators[i],"SPLIT",1,1).exists():
-            #if arg.verbosity>0: print("Found file {}.SPLIT.1.1".format(calibrators[i]))
+            #if args.verbosity>0: print("Found file {}.SPLIT.1.1".format(calibrators[i]))
             cdata.append(AIPSUVData(calibrators[i],"SPLIT",1,1))
         else:
             print("Could not find catalogue {}.SPLIT.1.1".format(calibrators[i]))
@@ -125,7 +125,7 @@ def main():
     '''
     for cal_split in cdata:
         if AIPSImage(cal_split.name,"ILC001",1,args.seq).exists():
-            if arg.verbosity>0: print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
+            if args.verbosity>0: print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
             AIPSImage(cal_split.name,"ILC001",1,args.seq).zap()
         _image(cal_split,args.gain,args.niter,args.cell,args.imsize,args.seq)
         if not args.nozap>0: _zapbeam(cal_split.name,args.seq)
