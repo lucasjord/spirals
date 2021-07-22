@@ -91,7 +91,7 @@ def main():
     else: sys.exit("Cannot find CVELed data {}.UVDATA.*.2".format(args.experiment+"_L"))
 
     try:
-        check_sncl(indata,8,4)
+        check_sncl(indata,4,8)
     except RuntimeError:
         sys.exit("Data is not calibrated sufficiently for this step CL>=8, SN>=4 required")
 
