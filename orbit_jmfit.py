@@ -81,14 +81,14 @@ def main():
         Check whether data has been calibrated sufficiently
     '''
     if AIPSUVData(args.experiment+"_L","UVDATA",1,2).exists():
-        if arg.verbosity>0: print("Found file {}."UVDATA".1.2".format(args.experiment+"_L"))
+        if arg.verbosity>0: print("Found file {}.UVDATA.1.2".format(args.experiment+"_L"))
         indata = AIPSUVData(args.experiment+"_L","UVDATA",1,2)
 
     elif AIPSUVData(args.experiment+"_L","UVDATA",2,2).exists():
-        if arg.verbosity>0: print("Found file {}."UVDATA".2.2".format(args.experiment+"_L"))
+        if arg.verbosity>0: print("Found file {}.UVDATA.2.2".format(args.experiment+"_L"))
         indata = AIPSUVData(args.experiment+"_L","UVDATA",2,2)
 
-    else: sys.exit("Cannot find CVELed data {}."UVDATA".*.2".format(args.experiment+"_L"))
+    else: sys.exit("Cannot find CVELed data {}.UVDATA.*.2".format(args.experiment+"_L"))
 
     try:
         check_sncl(indata,8,4)
@@ -201,18 +201,6 @@ def check_sncl(indata,sn,cl):
         print(indata.table_highver("AIPS SN"),sn)
         raise RuntimeError("Not enough SN tables")
 
-def _jmfit(inname=",inseq=1,fitout="):
-    jmfit           =  AIPSTask("jmfit")
-    jmfit.default
-    image           =  AIPSImage(inname,"ICL001",EXPDISK,inseq)
-    jmfit.indata    =  image
-    jmfit.fitout    =  fitout
-    jmfit.doprint   = -4
-    jmfit.blc[1:]  = [216.0, 216.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    jmfit.trc[1:]  = [296.0, 296.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    jmfit.niter     =  500
-    if image.exists(): jmfit()
-
 def check_sncl(indata,sn,cl):
     if (indata.table_highver("AIPS CL")==cl and
         indata.table_highver("AIPS SN")==sn):
@@ -234,16 +222,6 @@ def check_sncl(indata,sn,cl):
         while indata.table_highver("AIPS SN")>sn:
             indata.zap_table("AIPS SN", 0)
 
-
-###################################################
-###################################################
-
-def get_file(path):
-    #opens and external file and makes it into a list
-    fopen = path
-    f=open(fopen, "r+")
-    g=list(map(lambda s: s.strip(), list(f)))
-    return np.array(g)
 
 ###################################################
 ###################################################
