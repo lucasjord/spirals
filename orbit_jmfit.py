@@ -59,7 +59,7 @@ def main():
         First check whether experiment exists in AIPS at given AIPS USER#
     '''
     success = 0
-    for ftype in ["_G","_C","_L"]
+    for ftype in ["_G","_C","_L"]:
         for expclass in ["UVDATA"]:
             for disk in range(3):
                 for seq in range(3):
