@@ -34,19 +34,19 @@ def main():
     parser.add_argument("-g","--gain",
                         help="CLEAN loop gain, 0-1",
                         type=float,default=0.3)
-    parser.add_argument("-n","--niter"
+    parser.add_argument("-n","--niter",
                         help="Number of CLEAN iterations",
                         type=int,default=200)
-    parser.add_argument("-c","--cell"
+    parser.add_argument("-c","--cell",
                         help="Pixel size in image grid, units arcsec",
                         type=float,default=0.0001)
-    parser.add_argument("-i","--imsize"
+    parser.add_argument("-i","--imsize",
                         help="Image size in pixels",
                         type=int,default=1024)
-    parser.add_argument("-q","--seq"
+    parser.add_argument("-q","--seq",
                         help="Sequence of created images. Default 99. Will overwrite <seq> images if they exist.",
                         type=int,default=99)
-    parser.add_argument("-z","--nozap"
+    parser.add_argument("-z","--nozap",
                         help="Zap beam files? Enable to NOT delte the beams.",
                         type=count,default=0)
 
