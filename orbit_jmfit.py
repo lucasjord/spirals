@@ -22,7 +22,7 @@ import os, pdb, sys, argparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose",
+    parser.add_argument("-v", "--verbosity",
                         help="increase output verbosity",
                         action="count",default=0)
     parser.add_argument("experiment",
