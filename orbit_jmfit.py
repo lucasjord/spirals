@@ -21,6 +21,8 @@ import os, pdb, sys, argparse
 ####################################################################################################
 
 def main():
+    print('\n\n')
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbosity",
                         help="increase output verbosity",
@@ -29,28 +31,28 @@ def main():
                         help="experiment code e.g. X420A. Case sensitive.",
                         type=str)
     parser.add_argument("aipsid",
-                        help="AIPS USERID e.g. 666. Between 1-46656",
+                        help="AIPS USERID e.g. 666. Between 1-46656.",
                         type=int)
     parser.add_argument("-g","--gain",
-                        help="CLEAN loop gain, 0-1",
+                        help="CLEAN loop gain, 0-1. Default 0.3.",
                         type=float,default=0.3)
     parser.add_argument("-n","--niter",
-                        help="Number of CLEAN iterations",
+                        help="Number of CLEAN iterations. Default 200.",
                         type=int,default=200)
     parser.add_argument("-c","--cell",
-                        help="Pixel size in image grid, units arcsec",
+                        help="Pixel size in image grid, units arcsec.",
                         type=float,default=0.0001)
     parser.add_argument("-i","--imsize",
-                        help="Image size in pixels",
+                        help="Image size in pixels. 256, 512, 1024, 2048 etc. Default 1024.",
                         type=int,default=1024)
     parser.add_argument("-q","--seq",
                         help="Sequence of created images. Default 99. Will overwrite <seq> images if they exist.",
                         type=int,default=99)
     parser.add_argument("-z","--nozap",
-                        help="Zap beam files? Enable to NOT delte the beams.",
+                        help="Zap beam files? Enable to keep IBM001 entries.",
                         action="count",default=0)
     parser.add_argument("-d","--delete",
-                        help="Delete images afterwards?",
+                        help="Enable to delete ICL001 entries after fitting.",
                         action="count",default=0)
 
     args = parser.parse_args()
