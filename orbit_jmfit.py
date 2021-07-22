@@ -49,6 +49,9 @@ def main():
     parser.add_argument("-z","--nozap",
                         help="Zap beam files? Enable to NOT delte the beams.",
                         action="count",default=0)
+    parser.add_argument("-d","--delete",
+                        help="Delete images afterwards?",
+                        action="count",default=0)
 
     args = parser.parse_args()
 
@@ -154,6 +157,7 @@ def main():
         snr[i] = wim.header.datamax/rms
         x[i]   = ew[ind]
         y[i]   = ns[ind]
+        if args.delete>0: wim.zap()
     
     x_off1 = (x*snr**1).sum()/((snr**1).sum())
     y_off1 = (y*snr**1).sum()/((snr**1).sum())
@@ -188,39 +192,19 @@ def _zapbeam(inname,seq=99):
     if beam.exists():
         beam.zap()
 
+
 def check_sncl(indata,sn,cl):
     if (indata.table_highver("AIPS CL")>=cl and
         indata.table_highver("AIPS SN")>=sn):
             print("Tables are okay")
     
     if indata.table_highver("AIPS CL")<cl:
-        print(indata.table_highver("AIPS CL"),cl)
+        print('CL bad '+indata.table_highver("AIPS CL"),cl)
         raise RuntimeError("Not enough CL tables")
 
     if indata.table_highver("AIPS SN")<sn:
-        print(indata.table_highver("AIPS SN"),sn)
+        print('SN bad '+indata.table_highver("AIPS SN"),sn)
         raise RuntimeError("Not enough SN tables")
-
-def check_sncl(indata,sn,cl):
-    if (indata.table_highver("AIPS CL")==cl and
-        indata.table_highver("AIPS SN")==sn):
-            print("Tables are fine")
-    
-    if indata.table_highver("AIPS CL")<cl:
-        print(indata.table_highver("AIPS CL"),cl)
-        raise RuntimeError("Not enough CL tables")
-
-    if indata.table_highver("AIPS CL")>cl:
-        while indata.table_highver("AIPS CL")>cl:
-            indata.zap_table("AIPS CL", 0)
-
-    if indata.table_highver("AIPS SN")<sn:
-        print(indata.table_highver("AIPS SN"),sn)
-        raise RuntimeError("Not enough SN tables")
-
-    if indata.table_highver("AIPS SN")>sn:
-        while indata.table_highver("AIPS SN")>sn:
-            indata.zap_table("AIPS SN", 0)
 
 
 ###################################################
