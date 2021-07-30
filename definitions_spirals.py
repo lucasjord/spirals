@@ -52,6 +52,8 @@
 # 2020/12/14 Added run_snplt_diff to track RR-LL phase drifts  - LJH         #
 # 2021/01/12 Reversed runpang & runpang2 changes from 2020/03/30             #
 #            Edited bug in mafringe for short source names  - LJH            #
+# 2021/03/19 Changed cvel to use input or middle channel of band, now        #
+#            seperate channel to fringe fitting - LJH                        #
 ##############################################################################
 
 version_date='2021/01/12'
@@ -2941,7 +2943,8 @@ def runcvel_lba(indata, cvelsource, vel, inter_flag, doband, bpver, channel):
     setjy.veltyp = 'LSR'
     setjy.veldef = 'RADIO'
     channum = indata.header['naxis'][2]
-    setjy.aparm[1:] = [channel, 0]
+    if velchan==0: setjy.aparm[1:] = [int(channum/2.)+1, 0]
+    else:          setjy.aparm[1:] = [velchan, 0]
     #[channum/2.+crpix[2],0]
 
     for i in range(naxis[3]):

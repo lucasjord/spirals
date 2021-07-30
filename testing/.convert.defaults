@@ -1,0 +1,14 @@
+upper_range         1                   
+type                float               
+scale_option        factor_offset       
+save_unproc_data    on                  
+saturate_min        1e-30               
+saturate_max        1e+30               
+offset              0                   
+normalise           1                   
+lower_range         -1                  
+log_cycle_limit     8                   
+factor              1                   
+complex_option      real                
+array_names    
+

@@ -63,18 +63,19 @@ mp_source   = ['manualFF']            # fringe finder     '' => automatically
 mp_timera   = [0,0,0,0,0,0,0,0]       #[0,0,0,0,0,0,0,0]  # constrain time range for fringe finder?
 bandcal     = ['']                    # Bandpass calibrator
 
-delzn_flag  =  0              # Use DELZN (1) or fit_geblocks (0)?dd
-dual_geo    =  0              # Using dual frequency geodetic blocks?
+delzn_flag  =  0                  # Use DELZN (1) or fit_geblocks (0)?dd
+dual_geo    =  0                  # Using dual frequency geodetic blocks?
 
-geo_data_nr =  0              # data file with geo data? (<0 for no geoblock)
-cont        =  1              # data file with continuum data?
-line        =  2              # data file with line data?
-                              # if you have only one dataset, use cont = line
+geo_data_nr =  0                  # data file with geo data? (<0 for no geoblock)
+cont        =  1                  # data file with continuum data?
+line        =  2                  # data file with line data?
+                                  # if you have only one dataset, use cont = line
 
-channel     = 69                 # channel used for fringe fit
-cvelsource  = ['maser']   # line sources '' => calsource
-vel         = [666.]              # Velocity for cvel in band center
+cvelsource  = ['maser']           #  line sources '' => calsource
+velchan     = 1001              #  channel used for cvel, default 0=>Nchan/2+1
+vel         = [666.]              #  Velocity for cvel in band center
 
+channel     = 69                  # channel used for fringe fit after cvel
 
 pos_shift   = {''   : [0.,0.0]} #arcsecond
                                 # Which source should be shifted ''=calsource
