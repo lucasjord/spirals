@@ -56,7 +56,7 @@
 #            seperate channel to fringe fitting - LJH                        #
 ##############################################################################
 
-version_date='2021/01/12'
+version_date='2021/07/30'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
