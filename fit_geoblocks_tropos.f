@@ -13,8 +13,16 @@ c       v6a: Found a test for 100 sources in read_geodetic_file;
 c            changed to 300
 c       v6b: Increased from 1000 to 3000 station-oriented data points
 c       v7:  Expanded to allow up to 10 geoblocks
-c       v7a: Found a test for 500 sources in read_geodetic_file;
-c            changed to 1000
+c       v7b: skipped
+c       v7c: made changes as for v6c that fixed a bug in the 
+c            subroutines make_delzn_2c and make_atmos_fits_w_accel
+c            regarding station numbers when some ants are missing
+c       v7d: checks for enough data to fit for clock and zenith delays
+c       v8:  flexible number of geoblocks, up to 10
+c       v8a: added WA station
+c            hardwired to read max_blocks (=10) time ranges from the
+c            control_file.inp   file
+
 c       This version is for tropospheric data only (eg, dispersive
 c       delay corrected X-band or high (>20 GHz) frequency data).
 
@@ -36,15 +44,15 @@ c                                          su_table positions
         character*8 parnames(156)
 	integer     paramids(156)
 
-     	real*8	    data(200000), model(200000), resids(200000),
-     +		    res_err(200000), wtres(200000), gst(200000)
+     	real*8	    data(20000), model(20000), resids(20000),
+     +		    res_err(20000), wtres(20000), gst(20000)
 
-	real*8	    partls(200000,156)
+	real*8	    partls(20000,156)
 
         real*8      ut_min(10), ut_max(10), ut_blk(10)
 
-	integer	    n_stat_a(200000), n_stat_b(200000),
-     +              n_source(200000), n_block(200000)
+	integer	    n_stat_a(20000), n_stat_b(20000),
+     +              n_source(20000), n_block(20000)
 
         integer     num_per_stat_geo(12), num_per_stat_blk(12,10), 
      +              list_stations(12)
@@ -56,15 +64,15 @@ c                                          su_table positions
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	luprint = 6
 	write (luprint,1100)
-1100	format (/30x,'Program fit_geoblocks_tropos_v7: 2017 Apr 10')
+1100	format(/30x,'Program fit_geoblocks_tropos_v8a: 2020 Aug 18')
 
 c       Dimension Limits:
-	max_num_data	=200000		! max number data equations
+	max_num_data	=20000		! max number data equations
 	num_params	=  156		! max number of parameters
 	num_stations    =   12          ! max number of antennas
         max_blocks      =   10          ! max number of blocks
@@ -115,8 +123,12 @@ C                    Don't solve for parms if too little data
 	i_1 = 1 * num_stations           ! start of clock rates
 	i_2 = 2 * num_stations           ! start of clock accelerations
 
+        write (luprint,1110)
+ 1110   format(/'Checking antennas/blocks for enough data...')
 	do i_ns = 1, num_stations
-	   if ( num_per_stat_geo(i_ns) .lt. 4 ) then
+	   if ( num_per_stat_geo(i_ns) .lt. 8 ) then
+              write (luprint,1120) i_ns, num_per_stat_geo(i_ns)
+ 1120         format(' Ant #',i2,' has',i2,' delays; >7 required')
 	      paramids(i_0 + i_ns) = 0   ! clock offsets
 	      paramids(i_1 + i_ns) = 0   ! clock rates
 	      paramids(i_2 + i_ns) = 0   ! clock accelerations
@@ -125,12 +137,40 @@ C                    Don't solve for parms if too little data
 
 c       Check each station/block for too little data...
  	do i_ns = 1, num_stations
+           n_good_blocks = num_blocks
            do i_b = 1, num_blocks
               if ( num_per_stat_blk(i_ns,i_b) .lt. 4 ) then
+                 write (luprint,1130) i_ns, i_b,
+     +                                num_per_stat_blk(i_ns,i_b)
+ 1130            format(' Ant #',i2,': block',i2,' has',i2,
+     +                  ' delays; >3 required')
+                 n_good_blocks = n_good_blocks - 1
                  i_0 = (2 + i_b) * num_stations
                  paramids(i_0 + i_ns) = 0 ! zenith delay for station/block
 	      endif
            enddo
+c          Check that have enough blocks for various clock parameter fits...
+           if ( n_good_blocks .lt. 3 ) then
+              if ( paramids(i_2 + i_ns) .gt. 0 ) then
+                write (luprint,1140) i_ns 
+ 1140           format(' Ant #',i2,' has <3 blocks; will not fit accel')
+              endif
+              paramids(i_2 + i_ns) = 0 ! clock accelerations
+           endif
+           if ( n_good_blocks .lt. 2 ) then
+              if ( paramids(i_1 + i_ns) .gt. 0 ) then
+                write (luprint,1150) i_ns 
+ 1150           format(' Ant #',i2,' has <2 blocks; will not fit rate')
+              endif
+	      paramids(i_1 + i_ns) = 0   ! clock rates
+           endif
+           if ( n_good_blocks .lt. 1 ) then
+              if ( paramids(i_0 + i_ns) .gt. 0 ) then
+                write (luprint,1160) i_ns 
+ 1160           format(' Ant #',i2,' has <1 block; will not fit clock')
+              endif
+	      paramids(i_0 + i_ns) = 0   ! clock offsets
+           endif
 	enddo
 
 C       -------------------------------------------------------------
@@ -267,8 +307,7 @@ c       entries in ATMOS.FITS to track the changes.
 
         if ( used_clock_accel ) then
 c          Will read back the ATMOS.FILE, and make more frequent entries
-           call make_atmos_fits_w_accel( params, ut_mid_rads, 
-     +                                   list_stations )
+           call make_atmos_fits_w_accel( params, ut_mid_rads )
         endif
 
 
@@ -309,7 +348,7 @@ C            in common/geometry/
 
 	integer         list_stations(12)
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 
@@ -563,13 +602,6 @@ c             Very approximate values for VERA stations...
                  used          = .true.
               endif
 
-              if ( stat2 .eq. 'WA' ) then
-                 x(i_stat_num) = -5115425.6350d0        ! Warkworth
-                 y(i_stat_num) =   477880.3040d0
-                 z(i_stat_num) = -3767042.8370d0
-                 used          = .true.
-              endif
-
               if ( stat2 .eq. 'HO' ) then
                  x(i_stat_num) = -3950236.7341d0        ! Hobart
                  y(i_stat_num) = -2522347.5530d0
@@ -611,6 +643,20 @@ c             Very approximate values for VERA stations...
                  z(i_stat_num) = -3078590.989d0
                  used          = .true.
               endif
+
+	      if ( stat2 .eq. 'WA' ) then
+		 x(i_stat_num) = -5115425.60d0  	! Warkworth 30-m
+		 y(i_stat_num) =  -477880.31d0
+		 z(i_stat_num) = -3767042.81d0
+		 used          = .true.
+	      endif
+
+	      if ( stat2 .eq. 'WW' ) then
+		 x(i_stat_num) = -5115425.60d0  	! Temporarily using Warkworth 30-m
+		 y(i_stat_num) =  -477880.31d0          ! coordinates for their 12-m
+		 z(i_stat_num) = -3767042.81d0
+		 used          = .true.
+	      endif
 
               if ( stat2 .eq. 'YS' ) then               ! Yebes
                  x(i_stat_num) =  4848761.964d0
@@ -687,13 +733,13 @@ c       Info is put in common/geometry/
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	character*8  cal_name
 	character*8  epoch
 
-        max_num_sources = 1000     ! dimension limit for cal_ra, cal_dec arrays
+        max_num_sources = 300     ! dimension limit for cal_ra, cal_dec arrays
 
 c       -----------------------------------------------------------------------
 c       Input calibrator data file name and "SU" positions for geodetic like data
@@ -749,7 +795,7 @@ c                This line contains source coordinates...
 		       cal_ra (n_cal) = ra_deg  * deg_rad            ! radians
 		       cal_dec(n_cal) = dec_deg * deg_rad            ! radians
 		    else
-		       print *,'INVALID SU-TABLE SOURCE NUMBER (1-1000 allowed):', n_cal
+		       print *,' INVALID SU-TABLE SOURCE NUMBER (1-300 allowed):', n_cal
 		       stop
 		 endif
 
@@ -816,7 +862,7 @@ c
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
         write (6,5010)
@@ -886,8 +932,11 @@ c	      nth_print = 1
 c	endif
         nth_print = num_iter           ! hardwire to number of iterations
 
-c       Enter referenced time for clocks
-	read (8,8010) ut_hhmmss
+c       Enter referenced time for clocks 
+cV8a    but NOT the number of blocks to read in
+	read (8,8011) ut_hhmmss
+ 8011   format(f10.3,i10)
+
 c       Calculate middle GST (if entered mid UT time .ne. 0.0)
 	stm_mid = 0.d0
 	if ( ut_hhmmss .ne. 0.d0 ) then
@@ -895,14 +944,28 @@ c       Calculate middle GST (if entered mid UT time .ne. 0.0)
 	   stm_mid = gast0 + ut_mid_rad*sidereal_rate ! radians
 	endif
         write (6,5004) ut_hhmmss
- 5004   format(/' Input UT center time (hhmmss):',f10.1,/1x)
+ 5004   format(/' Input UT center time (hhmmss):',f10.1)
 
-c       Enter UT time ranges for up to "max_blocks"...
+c       Set number of allowed blocks 
+c       If not specified, defaults to 10 blocks
+c       V8a: hardwired it to read max_blocks from control_file.inp
+        n_blocks = max_blocks
+c        if ( n_blocks .eq. 0 ) n_blocks = 10
+        if ( n_blocks .gt. max_blocks) then
+           print*,' Request for ',n_blocks,' exceeds maximum of ',
+     +            max_blocks
+        endif
+
+        write (6,5111) n_blocks
+ 5111   format(/' Will read in time ranges and zenith delay info for',
+     +          i3,' geoblocks')
+
+c       Enter UT time ranges for n_blocks...
         num_blocks = 0
-        do i_b = 1, max_blocks
+        do i_b = 1, n_blocks
            read (8,8010) ut_min(i_b), ut_max(i_b)
            write (6,5005)i_b, ut_min(i_b), ut_max(i_b)
- 5005      format(' Block ',i2,': ut_min and max (days):',2f7.3)
+ 5005      format('   Block ',i2,': ut_min and max (days):',2f7.3)
            if ( ut_min(i_b) .gt. ut_max(i_b) ) then
               print *,' *** Invalid UT time range for block!'
               stop
@@ -910,7 +973,7 @@ c       Enter UT time ranges for up to "max_blocks"...
            if ( ut_max(i_b) .gt. 0.d0 ) num_blocks = num_blocks + 1
         enddo
         write (6,5006) num_blocks
- 5006   format(/' Number of time-blocks requested =',i3)
+ 5006   format(' Entered time ranges for',i3,' geoblocks')
 
 c       FOR VLBA data, SNR not currently passed to input files.
 c       ignore this parameter...
@@ -929,47 +992,101 @@ c       Station clocks...
 	        read (8,8010) delay_accel(i), delay_accel_id(i)
 	enddo
 
-c       Station zenith delays...
-c       Time block 1
-	do i=1, num_stations	                 ! Station zenith delay offsets
+c       Station zenith delays
+c       First zero values in case not used...
+        do i = 1, num_stations
+           del_tau_b1(i) = 0.d0
+           tau_id_b1(i)  = 0.d0
+           del_tau_b2(i) = 0.d0
+           tau_id_b2(i)  = 0.d0
+           del_tau_b3(i) = 0.d0
+           tau_id_b3(i)  = 0.d0
+           del_tau_b4(i) = 0.d0
+           tau_id_b4(i)  = 0.d0
+           del_tau_b5(i) = 0.d0
+           tau_id_b5(i)  = 0.d0
+           del_tau_b6(i) = 0.d0
+           tau_id_b6(i)  = 0.d0
+           del_tau_b7(i) = 0.d0
+           tau_id_b7(i)  = 0.d0
+           del_tau_b8(i) = 0.d0
+           tau_id_b8(i)  = 0.d0
+           del_tau_b9(i) = 0.d0
+           tau_id_b9(i)  = 0.d0
+           del_tau_b10(i) = 0.d0
+           tau_id_b10(i)  = 0.d0
+        enddo
+
+c       Now read from control file...
+        if ( n_blocks .ge. 1 ) then
+c          Time block 1
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b1(i), tau_id_b1(i)
-	enddo
-c       Time block 2
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 2 ) then
+c          Time block 2
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b2(i), tau_id_b2(i)
-	enddo
-c       Time block 3
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 3 ) then
+c          Time block 3
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b3(i), tau_id_b3(i)
-	enddo
-c       Time block 4
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 4 ) then
+c          Time block 4
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b4(i), tau_id_b4(i)
-	enddo
-c       Time block 5
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 5 ) then
+c          Time block 5
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b5(i), tau_id_b5(i)
-	enddo
-c       Time block 6
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 6 ) then
+c          Time block 6
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b6(i), tau_id_b6(i)
-	enddo
-c       Time block 7
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 7 ) then
+c          Time block 7
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b7(i), tau_id_b7(i)
-	enddo
-c       Time block 8
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 8 ) then
+c          Time block 8
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b8(i), tau_id_b8(i)
-	enddo
-c       Time block 9
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 9 ) then
+c          Time block 9
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b9(i), tau_id_b9(i)
-	enddo
-c       Time block 10
-	do i=1, num_stations	                 ! Station zenith delay offsets
+           enddo
+        endif
+
+        if ( n_blocks .ge. 10 ) then
+c          Time block 10
+           do i=1, num_stations ! Station zenith delay offsets
         	read (8,8010) del_tau_b10(i), tau_id_b10(i)
-	enddo
+           enddo
+        endif
 
  8010   format(8f10.3)
 
@@ -1313,9 +1430,9 @@ C	Read in geodetic-like data for many calibrators...
 
 	implicit real*8 (a-h,o-z)
 
-	real*8       gst(200000), data(200000)
-	integer	     n_stat_a(200000), n_stat_b(200000), 
-     +               n_source(200000), n_block(200000)
+	real*8       gst(20000), data(20000)
+	integer	     n_stat_a(20000), n_stat_b(20000), 
+     +               n_source(20000), n_block(20000)
 
         real*8       ut_min(10), ut_max(10), ut_blk(10)
         integer      n_in_blk(10)
@@ -1335,7 +1452,7 @@ C	Read in geodetic-like data for many calibrators...
 
 	logical      used_stat
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	lu_in	= 8
@@ -1395,7 +1512,7 @@ c               Check for other ills before using...
 	        if (  i_row.le.3000                          .and.
      +               (i_ant.ge.1 .and. i_ant.le.num_stations).and.
      +                x(i_ant).ne.0.d0                       .and.
-     +               (i_src.ge.1 .and. i_src.le.700)         .and.
+     +               (i_src.ge.1 .and. i_src.le.300)         .and.
      +                n_geo.lt.max_n_geo )   then
 
  		   if ( debug .ge. 1.0 ) then
@@ -1559,7 +1676,7 @@ c
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 
@@ -1639,15 +1756,15 @@ C       This now includes phase data and geodetic-like data.
 	implicit real*8 ( a-h,o-z )
 
 	real*8	params(156)
-	real*8	gst(200000),data(200000),model(200000),resids(200000)
+	real*8	gst(20000),data(20000),model(20000),resids(20000)
 
-	integer	n_stat_a(200000), n_stat_b(200000), 
-     +          n_block(200000),  n_source(200000)
+	integer	n_stat_a(20000), n_stat_b(20000), 
+     +          n_block(20000),  n_source(20000)
 
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
        
@@ -1655,7 +1772,7 @@ C       This now includes phase data and geodetic-like data.
 	n_geos = num_data 
 	if ( n_geos .gt. 0 ) then
 
-c          Go through geodetic data in pairs ( & rate)...
+c          Go through geodetic data in pairs (delay & rate)...
            n_d = 0
 	   do n = 1, n_geos, 2
 
@@ -1718,14 +1835,14 @@ c       setup parameters needed for the geodetic model calculations
 
 	real*8		params(156)
 
-	real*8		gst(200000)
-	integer		n_stat_a(200000), n_stat_b(200000), 
-     +                  n_block(200000)
+	real*8		gst(20000)
+	integer		n_stat_a(20000), n_stat_b(20000), 
+     +                  n_block(20000)
 
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	stm	 = gst(n_d)
@@ -1876,7 +1993,7 @@ c       Adopted coefficients of the model are for 30 deg station latitude.
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	rad_hr	= 12.d0/pi 
@@ -1957,10 +2074,10 @@ c
 	implicit real*8 ( a-h,o-z )
 
 	real*8	params(156), params_wiggled(156)
-	real*8	partls(200000,156), gst(200000)
+	real*8	partls(20000,156), gst(20000)
 
-	integer	n_stat_a(200000), n_stat_b(200000), 
-     +          n_source(200000), n_block(200000)
+	integer	n_stat_a(20000), n_stat_b(20000), 
+     +          n_source(20000), n_block(20000)
 	integer	paramids(156)
 
 
@@ -2120,7 +2237,7 @@ C	Calculate new "sigsq"...
 
 	implicit real*8	(a-h,o-z)
 
-	real*8	 resids(200000), res_err(200000)
+	real*8	 resids(20000), res_err(20000)
 
 c       -----------------------------------------------------------------
 c       For geodetic data...
@@ -2247,7 +2364,7 @@ c       and used to start off where the last run ended.
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
         control_file = 'control_file.out'
@@ -2336,7 +2453,7 @@ c
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	pi = 4.d0 * atan(1.d0)
@@ -2448,9 +2565,8 @@ c                Change units on rates to AIPS CLCOR desired units...
 c                zen_del_rate_sps14 = zen_del_rate * 1.d14 / (c*3600.d0) ! (sec/sec)*10^14
                  zen_del_rate_sps14 = 0.d0 ! handled in CLCOR by interpolating delays
 
-c                Need actual station number for these parameter values
-                 num_ant = list_stations( i_s )
-                 write (7,1100) num_ant, id, ihr, imin, sec, 
+c                Output parameter values
+                 write (7,1100) i_s, id, ihr, imin, sec, 
      +                          zen_del, clk_del_mid_block,   
      +                          zen_del_rate_sps14, clk_del_rate_sps14
 
@@ -2468,8 +2584,7 @@ c                Need actual station number for these parameter values
 	end
 c
 
-	subroutine make_atmos_fits_w_accel( params, ut_mid_rads, 
-     +                                      list_stations )
+	subroutine make_atmos_fits_w_accel( params, ut_mid_rads )
 
 	implicit real*8 ( a-h, o-z )
 
@@ -2478,14 +2593,14 @@ c
 c       Current dimension limits are up to 12 antennas and 10 blocks !!!!!!!!!!!!
         real*8          z_delays(12,10), times(12,10)
 
-        integer         list_stations(12), n_per_ant(12)
+        integer         n_per_ant(12)
 
         character*24    atmos_file
         
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
         n_blocks_max = 10                !!!! hardwired !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2602,9 +2717,7 @@ c          Check that there is at least 1 geoblock entry for this antenna...
                  sec     = (ut_hr - ihr*1.0d0 - imin/60.0d0) * 3600.d0
                  
 c                Linearly interpolate zenith delays from geoblock values
-                 num_ant = list_stations(n_s)
-
-                 call interp_delay ( num_ant, n_per_ant, t_entry, 
+                 call interp_delay ( n_s, n_per_ant, t_entry, 
      +                               times, z_delays,
      +                               zen_del )
 
@@ -2635,8 +2748,8 @@ c                Change units on rates to AIPS CLCOR desired units...
 c                zen_del_rate_sps14 = zen_del_rate * 1.d14 / (c*3600.d0) ! (sec/sec)*10^14
                  zen_del_rate_sps14 = 0.d0 ! handled in CLCOR by interpolating delays
 
-c                Need actual station number for these parameter values
-                 write (7,1100) num_ant, id, ihr, imin, sec, 
+c                Output interpolated values
+                 write (7,1100) n_s, id, ihr, imin, sec, 
      +                          zen_del, clk_del,   
      +                          zen_del_rate_sps14, clk_del_rate_sps14
  1100            format(i3,i4,i3,i3,f5.1,f9.3,f11.3,2f12.5)
@@ -2898,8 +3011,8 @@ c
 
 	implicit real*8 (a-h,o-z)
 
-	real*8	data(200000), model(200000), resids(200000),
-     +		res_err(200000), wtres(200000)
+	real*8	data(20000), model(20000), resids(20000),
+     +		res_err(20000), wtres(20000)
 
 c	Print out Data and Rsidual...
 	lu_print = 6
@@ -2923,10 +3036,10 @@ c
 
 	implicit real*8 ( a-h, o-z )
 
-	real*8	data(200000), model(200000), resids(200000),
-     +		res_err(200000), gst(200000)
+	real*8	data(20000), model(20000), resids(20000),
+     +		res_err(20000), gst(20000)
 
-	integer	n_stat_a(200000), n_stat_b(200000)
+	integer	n_stat_a(20000), n_stat_b(20000)
 
         integer list_stations(12)
 
@@ -2936,7 +3049,7 @@ c
 	common /constants/ c,pi,twopi,secday,sidereal_rate,
      +			deg_rad,asec_rad,frequency,wavelength
 
-	real*8	x(12), y(12), z(12), cal_ra(1000), cal_dec(1000)
+	real*8	x(12), y(12), z(12), cal_ra(300), cal_dec(300)
 	common/geometry/ x,y,z,gast0,cal_ra,cal_dec,num_stations
 
 	sid_hr = 12.d0/pi/sidereal_rate   ! convert sid(rad) -> hr
@@ -3094,7 +3207,7 @@ c
      +				VNAME, X, ID, S,
      +                          C, E, XHAT2, ERROR )
 
-C     SUBROUT FOR LINEAR LEAST SQUARE FITTING...
+C     SUBROUTINE FOR LINEAR LEAST SQUARE FITTING...
 C     IT REQUIRES INPUT OF THE FOLLOWING:
 C        IDEBUG    = DEBUGGING PARAMETER
 C                    0 = SUPRESS PRINT OUT BEYOND SOLUTION AND CORRELATI
@@ -3125,7 +3238,7 @@ C        THE SOLUTION AND CORRELATIONS ARE AUTOMATICALLY PRINTED OUT
 
       REAL*8       B(156,156),BSTORE(156,156),XIDENT(156,156),
      +             COR(156,156),ERROR(156),STDEV(156),PR(156),
-     +             XHAT(156),SNEW(200000),PRODCT(200000)
+     +             XHAT(156),SNEW(20000),PRODCT(20000)
 
       DIMENSION LL(156),MM(156)
       DATA      MSIZE /156/
