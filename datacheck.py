@@ -223,7 +223,8 @@ if args.calibrate == True or (args.load == False and args.calibrate == False and
     possm.outtext = path_datacheck+'maser-spectrum.txt'
     possm()
 
-    maser_peak = subprocess.check_output(f"sort -k6 -n {path_datacheck}maser-spectrum.txt | tail -n 1", shell=True).split()
+    pdb.set_trace()
+    maser_peak = subprocess.check_output('sort -k6 -n {0}maser-spectrum.txt | tail -n 1'.format(path_datacheck), shell=True).split()
     maser_channel = int(maser_peak[0])
     print("Maser peak channel: ", maser_channel)
 
