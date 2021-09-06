@@ -161,11 +161,11 @@ if args.load == True or (args.load == False and args.calibrate == False and args
 if args.calibrate == True or (args.load == False and args.calibrate == False and args.plot == False and args.delete == False):
 
     # Find maser source name in SU table (G source).
-    maser = subprocess.check_output(['awk', '/G[0-9]/ {print $3}', 'SU.txt']).split()
+    maser = subprocess.check_output(['awk', '/G[0-9]/ {print $3}', path_datacheck+'SU.txt']).split()
     
     # Find delay calibrator source names in SU table (F sources and initial fringe check source).
-    fringe_finder = subprocess.check_output(['awk', '/F[0-9]/ {print $3}', 'SU.txt']).split()
-    f1 = subprocess.Popen(['awk', '{print $2, $3}', 'SU.txt'], stdout=subprocess.PIPE)
+    fringe_finder = subprocess.check_output(['awk', '/F[0-9]/ {print $3}', path_datacheck+'SU.txt']).split()
+    f1 = subprocess.Popen(['awk', '{print $2, $3}', path_datacheck+'SU.txt'], stdout=subprocess.PIPE)
     f2 = subprocess.Popen(['awk', '$1 == "1" {print $2}'], stdin=f1.stdout, stdout=subprocess.PIPE)
     f1.stdout.close()
     f3,err = f2.communicate()
@@ -220,10 +220,10 @@ if args.calibrate == True or (args.load == False and args.calibrate == False and
     possm.nplots = 0
     possm.docal = -1
     possm.aparm[1] = -1
-    possm.outtext = './maser-spectrum.txt'
+    possm.outtext = path_datacheck+'maser-spectrum.txt'
     possm()
 
-    maser_peak = subprocess.check_output("sort -k6 -n maser-spectrum.txt | tail -n 1", shell=True).split()
+    maser_peak = subprocess.check_output(f"sort -k6 -n {path_datacheck}maser-spectrum.txt | tail -n 1", shell=True).split()
     maser_channel = int(maser_peak[0])
     print("Maser peak channel: ", maser_channel)
 
@@ -283,15 +283,15 @@ if args.plot == True or (args.load == False and args.calibrate == False and args
     lwpla.dparm = AIPSList([0,1,0,0,0,4,41,8,0])
     lwpla.indata = data_geo
     lwpla.inver = data_geo.table_highver('PL')
-    lwpla.outfile = './fringSN-geo.ps'
+    lwpla.outfile = path_datacheck+'/fringSN-geo.ps'
     lwpla()
     lwpla.indata = data_cont
     lwpla.inver = data_cont.table_highver('PL')
-    lwpla.outfile = './fringSN-cont.ps'
+    lwpla.outfile = path_datacheck+'/fringSN-cont.ps'
     lwpla()
     lwpla.indata = data_line
     lwpla.inver = data_line.table_highver('PL')
-    lwpla.outfile = './fringSN-line.ps'
+    lwpla.outfile = path_datacheck+'/fringSN-line.ps'
     lwpla()
 
     data_geo.zap_table('PL',-1)
@@ -327,15 +327,15 @@ if args.plot == True or (args.load == False and args.calibrate == False and args
     lwpla.dparm = AIPSList([0,1,0,0,0,4,41,8,0])
     lwpla.indata = data_geo
     lwpla.inver = data_geo.table_highver('PL')
-    lwpla.outfile = './spectrumRAW-geo.ps'
+    lwpla.outfile = path_datacheck+'/spectrumRAW-geo.ps'
     lwpla()
     lwpla.indata = data_cont
     lwpla.inver = data_cont.table_highver('PL')
-    lwpla.outfile = './spectrumRAW-cont.ps'
+    lwpla.outfile = path_datacheck+'/spectrumRAW-cont.ps'
     lwpla()
     lwpla.indata = data_line
     lwpla.inver = data_line.table_highver('PL')
-    lwpla.outfile = './spectrumRAW-line.ps'
+    lwpla.outfile = path_datacheck+'/spectrumRAW-line.ps'
     lwpla()
 
     data_geo.zap_table('PL',-1)
@@ -379,15 +379,15 @@ if args.plot == True or (args.load == False and args.calibrate == False and args
     lwpla.dparm = AIPSList([0,1,0,0,0,4,41,8,0])
     lwpla.indata = data_geo
     lwpla.inver = data_geo.table_highver('PL')
-    lwpla.outfile = './spectrumCAL-geo.ps'
+    lwpla.outfile = path_datacheck+'/spectrumCAL-geo.ps'
     lwpla()
     lwpla.indata = data_cont
     lwpla.inver = data_cont.table_highver('PL')
-    lwpla.outfile = './spectrumCAL-cont.ps'
+    lwpla.outfile = path_datacheck+'/spectrumCAL-cont.ps'
     lwpla()
     lwpla.indata = data_line
     lwpla.inver = data_line.table_highver('PL')
-    lwpla.outfile = './spectrumCAL-line.ps'
+    lwpla.outfile = path_datacheck+'/spectrumCAL-line.ps'
     lwpla()
 
     data_geo.zap_table('PL',-1)
@@ -414,7 +414,7 @@ if args.plot == True or (args.load == False and args.calibrate == False and args
     lwpla.lpen = 1
     lwpla.dparm = AIPSList([0,1,0,0,0,4,41,8,0])
     lwpla.inver = data_line.table_highver('PL')
-    lwpla.outfile = './maserpeakVPLOT.ps'
+    lwpla.outfile = path_datacheck+'/maserpeakVPLOT.ps'
     lwpla()
 
     data_line.zap_table('PL',-1)
