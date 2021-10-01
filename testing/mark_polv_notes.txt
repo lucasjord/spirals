@@ -1,0 +1,31 @@
+Lucas,
+
+Attached are two files:
+   pconv_test_13.f                     ! latest version of PolarizationCONVersion
+It reads a file called
+   amp_phs.uvprt                       ! created by UVPRT.   
+
+The format of the UVPRT output is important.   For example, the time must be in standard AIPS format (not decimal days).   Unfortunately AIPS/UVPRT allocates only 4 characters for (integer) phases, so, for example, a phase of -117 runs into the amplitude (no space between them).   This means I can't use a "free-format" read statement (which uses spaces as separators).
+
+You will need to do a little hand editing of the UVPRT output:
+Copy 6 lines from 1 scan, which will be the modified manual phase cal scan, to the top.  Re-arrange their order to be **exactly**   1-2, 1-3, 1-4, 2-3, 2-4, 3-4.   This is important!
+
+This version of the program is set up to only do 1 source, since one needs to manually enter an RA and Dec.  Look at the code near the top which also gives information on the date of the observation.   These need changing for different data sets and sources.
+
+Further down the program in subroutine ANT_INFO, are parameters for the antennas.   If you are doing CD,HB,KE,WA then they may not need changing, unless the feed gains (g_x and g_y) are different.  Looking at the printout from running the program on this data set, I seem to have too much power in baseline 2-3, so those gains are probably wrong.  I must have forgotten to take a sqrt for voltage corrections, compared to power corrections.
+
+The psi_a and psi_b parameters give the two linear feed orientations at zero parallactic angle.   So, for example, I've set psi_a=90deg (Horizontal) for HB, but psi_a=0deg (Vertical) for KE.    I've experimented with, for example,  psi_a=-90deg (flipped Horizontal), with little success.
+
+The program first prints the 4 modified manual phase cal phases for each baseline.
+
+Then for each UVPRTed record, it prints the input data and then the PCONVed data.   The order of correlators is RR,LL,RL,LR as AIPS prints out.    I calculate source parallactic angles and they are printed on the 2nd line.
+
+I've tried two approaches to "precalibrate" data in AIPS:
+
+1) No calibration at all.  This can work for the maser, looking only at 1 spectral channel, since one doesn't need to do a manual phase cal to remove phase slopes across the IF bands.   I hoped that the "modified manual phase cal" in  pconv_test_13.f  would be all that is needed.    I did scan-averaging to increase SNR and outputted the desired spectral channel to the UVPRT output.
+
+2) Doing only a manual phase cal in AIPS, in order to flatten the phase across an IF band, and then scan and frequency average the data.    It might be useful to try the VLBAXPOL correction for the phases of the cross-hands data.  I outputted only 1 IF for simplicity when I looked at F0730 data.
+
+Good luck...this has driven me crazy.     We can do a Zoom if you want some more explanations.
+
+Mark
