@@ -22,7 +22,7 @@ import matplotlib.animation as animation
 
 matplotlib.rcParams.update({'font.size': 14})
 rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
-rc('text', usetex=True)
+#rc('text', usetex=True)
 
 ##############################################################################################
 
