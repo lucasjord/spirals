@@ -54,19 +54,23 @@
 #            Edited bug in mafringe for short source names  - LJH            #
 # 2021/03/19 Changed cvel to use input or middle channel of band, now        #
 #            seperate channel to fringe fitting - LJH                        #
+# 2021/10/03 Added inverse Multiview routines - LJH                          #
 ##############################################################################
 
-version_date='2021/07/30'
+version_date='2021/10/03'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
 from AIPSData import AIPSUVData, AIPSImage
 from Wizardry.AIPSData import AIPSUVData as WAIPSUVData
 import AIPSTV
-import AIPS, os, math, time
+import AIPS, os, math, time, sys
 from pylab import *
 
-#import pdb #debugger
+from astropy.coordinates import SkyCoord
+import astropy.units as u, fileinput
+
+import pdb #debugger
 
 if 'aipsver' in locals() and globals(): AIPSTask.version = aipsver
 else: aipsver = AIPSTask.version
@@ -1473,9 +1477,6 @@ def runtasav(indata, i, logfile):
 
 ##############################################################################
 #
-
-##############################################################################
-#
 def runtacop(indata, outdata, inext, inver, outver, ncount):
     tacop         = AIPSTask('TACOP')
     tacop.indata  = indata
@@ -1893,7 +1894,7 @@ def checkatmos(inter_flag,logfile):
     else:
         mprint('ATMOS.FITS file ok.',logfile)
 
-    plotatmos(inter_flag, logfile)
+    #plotatmos(inter_flag, logfile)
 
 ##############################################################################
 #
@@ -2419,7 +2420,7 @@ def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, 
 
 ##############################################################################
 #
-def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam):
+def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,baselines=[0]):
 
     if imna=='':
         outname=source
@@ -2449,6 +2450,7 @@ def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam):
     imagr.outdisk      = indata.disk
     imagr.dotv         = -1
     imagr.antennas[1:] = antennas
+    imagr.baseline[1:] = baselines
     imagr.bmaj         = beam[0]
     imagr.bmin         = beam[1]
     imagr.bpa          = beam[2]
@@ -2693,7 +2695,6 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk, doband, bpve
         vbgludata.zap()
     vbglu()
 
-
     vbglu.indata  = vbgludata
     vbglu.in2data  = vbgludata
     vbglu.outcl   = '4IF'
@@ -2704,6 +2705,8 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk, doband, bpve
         vbgludata2.clrstat()
         vbgludata2.zap()
     vbglu()
+
+    vbgludata.zap()
 
     vbglu.indata  = vbgludata2
     vbglu.in2data  = vbgludata2
@@ -2716,6 +2719,7 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk, doband, bpve
         vbgludata3.zap()
     vbglu()
 
+    vbgludata2.zap()
 
     indxr.indata    = vbgludata3
     indxr()
@@ -4767,6 +4771,101 @@ def data_info(indata, i, geo, cont, line, logfile):
               +' IFs'+add, logfile)
         return band, naxis[1], naxis[2], naxis[3]
 
+##############################################################################
+# Added by LJH
+
+# deletes beam
+def _zapbeam(source,inseq=1):
+    beam=AIPSImage(source,'IBM001',1,inseq)
+    if beam.exists():
+        beam.zap()
+
+
+
+# loads files
+def get_file(path):
+    #opens and external file and makes it into a list
+    fopen = path
+    f=open(fopen, 'r+')
+    g=list(f)
+    g=map(lambda s: s.strip(), g)
+    return g
+
+#splits strings into lists/numpy arrays
+def splitt(old_list):
+    #splits the list entries into sublists
+    new_list=[]
+    for i in old_list:
+        new_list+=[i.split()]
+    return np.array(new_list)
+
+# extra AIPS tasks
+def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',aparm7=0,chan=0,refant=0):
+    calib             = AIPSTask('CALIB')
+    calib.indata      = indata
+    calib.calsour[1:] = sources
+    calib.gainu       = gainuse
+    calib.snver       = snver
+    calib.solmode     = solmode
+    calib.soltype     = soltype
+    calib.aparm[3]    = 1
+    calib.aparm[7]    = aparm7
+    calib.refant      = refant
+    calib()
+
+def runsplat(indata,outdata,sources=[''],stokes='HALF',docal=-1):
+    splat = AIPSTask('splat')
+    splat.indata      = indata
+    splat.outdata     = outdata
+    splat.sources[1:] = sources
+    splat.stokes      = stokes
+    splat.docalib     = docal
+    splat.gainu       = 0
+    splat.aparm[1:]   = [2,0]
+    splat()
+
+def runtbout(indata,inext,inver,outtext):
+    tbout         = AIPSTask('TBOUT')
+    tbout.indata  = indata
+    tbout.inext   = inext
+    tbout.inver   = inver
+    tbout.outtext = outtext
+    tbout.docrt   = 999
+    tbout()
+
+def runtbin(outdata,intext):
+    tbin          = AIPSTask('TBIN')
+    tbin.outdata  = outdata
+    tbin.intext   = intext
+    tbin()
+
+# make multiview control file from indata=calibrator in2data=linedata
+def make_multiviewcontrol(indata,in2data,mv_window=30.,outfile='multiview/multiview_control.inp'):
+    if os.path.exists(outfile): os.remove(outfile)
+    #making su tables
+    su_cal = [[s.id__no, s.source, s.raepo, s.decepo] for s in indata.table('SU',1)]
+    su_mas = [[s.id__no, s.source, s.raepo, s.decepo] for s in in2data.table('SU',1) if "G" in s.source][0]
+    with open(outfile,'w+') as f:
+        print >> f, '! {} QSO offsets from target source {}'.format(outname[0][:-2],su_mas[1].strip(' '))
+        print >> f,'! '
+        print >> f,'! Number of IFs in multiview.TBOUT file'
+        print >> f,'   {}'.format(indata.header['naxis'][3])
+        print >> f,'! '
+        print >> f,'! Time window (min) multiview fitting (eg, 15 => +/-15 min from a target time)'
+        print >> f,'  {}'.format(mv_window)
+        print >> f,'! Following source numbers from LISTR(scan)...NEEDS TO BE CORRECT'
+        print >> f,'! Src#   Name           dX     dY  in degrees'
+        for cal in su_cal:
+            print >> f,' {:2.0f}     {:<10s}    {:>5.2f}  {:>5.2f}'.format(cal[0],cal[1].strip(' '),
+                                                                      (cal[2]-su_mas[2])*np.cos(su_mas[3]*np.pi/180.),
+                                                                      cal[3]-su_mas[3])
+
+# python version of sed            
+def replace(file, searchExp, replaceExp):
+    for line in fileinput.input(file, inplace=1):
+        line = line.replace(searchExp, replaceExp)
+        sys.stdout.write(line)
+
 # END defs
 ##############################################################################
 
@@ -4921,6 +5020,18 @@ if 'RDBE_check' in locals() and globals():pass
 else: RDBE_check = 0
 if 'TECU_model' in locals() and globals():pass
 else: TECU_model = 'jplg'
+if 'imultiv_flag' in locals() and globals(): pass
+else: imultiv_flag = 0
+if 'imv_imagr_flag' in locals() and globals(): pass
+else: imv_imagr_flag = 0
+if 'mvwin' in locals() and globals():pass
+else: mvwin = 30.0
+if 'ant_bls' in locals() and globals(): pass
+else: ant_bls = [0]
+if 'imv_prep_flag' in locals() and globals(): pass
+else: imv_prep_flag = 0
+if 'imv_app_flag' in locals() and globals(): pass
+else: imv_app_flag = 0
 
 ##############################################################################
 # Start main script
@@ -5021,6 +5132,8 @@ if pr_prep_flag==1 or geo_prep_flag==1:
     doy=get_day_of_year(year, month, day)
     
     get_TEC(year,doy,TECU_model)
+    if not os.path.exists(eop_path):
+        os.mkdir(eop_path)
     get_eop(eop_path)
 
     if num_days==2: get_TEC(year,doy+1,TECU_model)
@@ -5265,7 +5378,7 @@ for i in pr_data_nr:
     if tasav_flag==1:
         runtasav(pr_data, i, logfile)
 
-    if restore_su_flag==1:
+    if restore_su_flag==1 or pr_prep_flag==1:
         restore_su(pr_data, logfile)
 
     if restore_fg_flag==1:
@@ -5587,7 +5700,7 @@ if split_flag==1:
 
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
 
-    if cont_data2.exists():
+    if cont_data2.exists() and line==cont:
         check_sncl(cont_data2, 4, 8,logfile)
         run_split(cont_data2, split_sources, split_outcl, doband, bpver)
     else:
@@ -5619,13 +5732,6 @@ if print_sn_flag==1:
         mprint(get_time(),logfile)
         mprint('######################',logfile)
 
-
-def _zapbeam(source):
-    beam=AIPSImage(source,'IBM001',1,1)
-    if beam.exists():
-        beam.zap()
-
-
 if co_imagr_flag==1:   
 
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
@@ -5634,7 +5740,7 @@ if co_imagr_flag==1:
          split_data=AIPSUVData(source,split_outcl,cont_data.disk,1)
          if split_data.exists():
              runimagr(split_data, source, niter, cellsize, imsize, -1, imna,
-                      antennas, uvwtfn, robust,beam)
+                      antennas, uvwtfn, robust,beam,baselines=ant_bls)
              _zapbeam(source)
 
 if ma_imagr_flag==1:
@@ -5675,6 +5781,91 @@ if fittp_flag==1:
     for source in cvelsource:
         run_fittp_data(source, split_outcl, defdisk, logfile)
     mprint('########################################################', logfile)
+
+###########################################################################
+
+if imv_prep_flag==1:
+    if line_data2.exists(): 
+        line_data2.clrstat()
+        check_sncl(line_data2, 4, 8,logfile)
+
+    check_sncl(cont_data, 4, 8,logfile)
+    calsource = findcal(line_data2, calsource)
+
+    if not os.path.exists('./multiview'):
+        os.makedirs('./multiview')
+
+    if cont_data2.exists() and line!=cont: 
+        cont_data2.zap()
+    elif cont_data2.exists() and line==cont:
+        mprint('########################################################', logfile)
+        mprint('Deleting cont_data2, hope you did not want it',logfile)
+        mprint('########################################################', logfile)
+        cont_data2.zap()
+
+    runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
+
+    runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
+    #runcalib(line_data2,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel)
+
+    make_multiviewcontrol(cont_data2,line_data2,mv_window=mvwin)
+
+    if os.path.exists('./multiview/multiview.TBOUT'): os.remove('./multiview/multiview.TBOUT')
+    runtbout(cont_data2,'SN',1,'./multiview/multiview.TBOUT')
+    replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
+
+    if os.path.exists('./multiview/target.TBOUT'): os.remove('./multiview/target.TBOUT')
+    runtbout(line_data2,'SN',4,'./multiview/target.TBOUT')
+    replace('./multiview/target.TBOUT',"'INDE'",'-999.9')
+
+if imultiv_flag==1:
+    if line_data2.exists(): 
+        line_data2.clrstat()
+        check_sncl(line_data2, 4, 8,logfile)
+
+    calsource = findcal(line_data2, calsource)
+
+    if not os.path.exists('./multiview'):
+        sys.exit('./multiview directory does not exist. Run with imv_prep_flag first.')
+
+    os.chdir('./multiview/')
+    mv_task = os.system(mv_path+'multiview_4x > multiview_4x.prt')
+    if mv_task==0:
+        print 'MULTV: Appears to have ended successfully'
+    else: 
+        print 'MUTLV: Purports to die of UNNATURAL causes'
+        print 'Please check input files in ./multiview/'
+        raise ValueError
+
+    os.chdir('../')
+
+if imv_app_flag==1:
+    if line_data2.exists(): 
+        line_data2.clrstat()
+        check_sncl(line_data2, 4, 8,logfile)
+        
+    runtbin(line_data2,'./multiview/target.TBIN')
+    runclcal(line_data2,5,8,9,'',1,refant)
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
+if imv_imagr_flag==1:
+    if line_data2.exists(): 
+        line_data2.clrstat()
+        check_sncl(line_data2, 5, 9,logfile)
+
+    mprint('######################',logfile)
+    mprint('Imaging channel: '+str(channel),logfile)
+    mprint('######################',logfile)
+
+    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,'',uvwtfn,robust,beam)
+    _zapbeam(calsource,inseq=1)
+    _zapbeam(calsource,inseq=2)
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
 
 ###########################################################################
 
