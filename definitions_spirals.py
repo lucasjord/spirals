@@ -435,7 +435,8 @@ def loadindx(filepath,filename,outname,outclass,
     fitld.clint    = 1./60.
     fitld.wtthresh = 0.45
     if aipsver!='31DEC09':
-        fitld.antname[1:] = [antname]
+        if not antname=='LBA': 
+            fitld.antname[1:] = [antname]
 
     data = AIPSUVData(fitld.outname, fitld.outclass,
                       int(fitld.outdisk), int(fitld.outseq))
@@ -1377,8 +1378,8 @@ def fringegeo(indata, refant):
     fringe.calsour[1:] = ''
     fringe.solint      = 6
     fringe.weightit    = 3
-    fringe.aparm[1:]   = [2, 0, d3, 0, d5, 0, 5]
-    fringe.dparm[1:]   = [1, 20, 50, 0]
+    fringe.aparm[1:]   = [2, 0, d3, 0, d5, 0, 3]
+    fringe.dparm[1:]   = [1, 30, 100, 0]
     fringe.dparm[4]    = 0
     fringe.dparm[8]    = 0
     fringe.snver       = 2
@@ -2420,7 +2421,7 @@ def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, 
 
 ##############################################################################
 #
-def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,baselines=[0]):
+def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,baselines=[0],timer=[0]):
 
     if imna=='':
         outname=source
@@ -2437,6 +2438,7 @@ def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,ba
     imagr.sourc[1:]    = [source]
     imagr.uvwtfn       = uvwtfn
     imagr.robust       = robust
+    imagr.timer[1:]    = timer
     imagr.bif          = 0
     imagr.eif          = 0
     imagr.nchav        = 16
@@ -2486,7 +2488,8 @@ def rungridimagr(indata,source,niter,cz,iz,docal,uvwtfn,robust,beam):
 
 ##############################################################################
 #
-def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam):
+def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam,
+    baselines=[0],timer=[0]):
 
     if imna=='':
         outname = source
@@ -2519,6 +2522,8 @@ def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam):
     imagr.bmaj         = beam[0]
     imagr.bmin         = beam[1]
     imagr.bpa          = beam[2]
+    imagr.timer[1:]    = timer
+    imagr.baseline[1:] = baselines
     imagr()
 
 ##############################################################################
@@ -3869,7 +3874,8 @@ def phase_selfcal(indata, source, solint, outdisk, niter, cellsize, imsize,
     while AIPSUVData(outname,'CALIB',line_data.disk,ncal+1).exists():
         ncal+=1
     cal_data=AIPSUVData(outname,'CALIB',line_data.disk,ncal)
-    runimagr(cal_data, source, niter, cellsize, imsize, -1, imna, im_ants,uvwtfn, robust,beam)
+    runimagr(cal_data, source, niter, cellsize, imsize, -1, imna, im_ants,uvwtfn, robust,beam,
+        baselines=ant_bls,timer=imgr_timer)
 
     return cal_data
 
@@ -3951,7 +3957,8 @@ def amp_selfcal(indata, source, solint, outdisk, niter, cellsize,
     while AIPSUVData(outname,'CALIB',line_data.disk,ncal+1).exists():
         ncal+=1
     cal_data=AIPSUVData(outname,'CALIB',line_data.disk,ncal)
-    runimagr(cal_data, source, niter, cellsize, imsize, -1, imna, antennas,uvwtfn,robust,beam)
+    runimagr(cal_data, source, niter, cellsize, imsize, -1, imna, antennas,uvwtfn,robust,beam,
+        baselines=ant_bls,timer=imgr_timer)
 
     return cal_data
 
@@ -5032,6 +5039,8 @@ if 'imv_prep_flag' in locals() and globals(): pass
 else: imv_prep_flag = 0
 if 'imv_app_flag' in locals() and globals(): pass
 else: imv_app_flag = 0
+if 'imgr_timer' in locals() and globals(): pass
+else: imgr_timer = [0,0,0,0,0,0,0,0]
 
 ##############################################################################
 # Start main script
@@ -5740,7 +5749,7 @@ if co_imagr_flag==1:
          split_data=AIPSUVData(source,split_outcl,cont_data.disk,1)
          if split_data.exists():
              runimagr(split_data, source, niter, cellsize, imsize, -1, imna,
-                      antennas, uvwtfn, robust,beam,baselines=ant_bls)
+                      antennas, uvwtfn, robust,beam,baselines=ant_bls,timer=imgr_timer)
              _zapbeam(source)
 
 if ma_imagr_flag==1:
@@ -5753,7 +5762,7 @@ if ma_imagr_flag==1:
                  print split_data.name
                  split_data.rename(split_data.name[0:8],split_data.klass,split_data.seq)
              runmaimagr(split_data, source, niter, cellsize, imsize,channel,
-                        -1, imna, uvwtfn, robust, beam)
+                        -1, imna, uvwtfn, robust, beam,baselines=ant_bls)
              _zapbeam(split_data.name[0:8])
 
 if cube_imagr_flag==1:
@@ -5860,7 +5869,8 @@ if imv_imagr_flag==1:
     mprint('Imaging channel: '+str(channel),logfile)
     mprint('######################',logfile)
 
-    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,'',uvwtfn,robust,beam)
+    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,'',
+        uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer)
     _zapbeam(calsource,inseq=1)
     _zapbeam(calsource,inseq=2)
     mprint('######################',logfile)
@@ -5960,7 +5970,7 @@ if refeed_flag==1:
          split_data=AIPSUVData(source,split_outcl,cont_data.disk,1)
          if split_data.exists():
              runimagr(split_data, source, niter, cellsize, imsize, -1, imna,
-                      antennas,uvwtfn, robust, beam)
+                      antennas,uvwtfn, robust, beam, baselines=ant_bls,timer=imgr_timer)
 
 if phase_target_flag!='':
     source = phase_target_flag

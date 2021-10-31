@@ -89,9 +89,9 @@ else:
 fits_geo = path_geo + experiment + '-geo.fits'
 fits_cont = path_cont + experiment + '-cont.fits'
 fits_line = path_line + experiment + '-line.fits'
-name_geo = experiment.upper() + '.G'
-name_cont = experiment.upper() + '.C'
-name_line = experiment.upper() + '.L'
+name_geo = experiment.upper() + '_G'
+name_cont = experiment.upper() + '_C'
+name_line = experiment.upper() + '_L'
 data_geo = AIPSUVData(name_geo,'UVDATA',1,1)
 data_cont = AIPSUVData(name_cont,'UVDATA',1,1)
 data_line = AIPSUVData(name_line,'UVDATA',1,1)
@@ -184,7 +184,7 @@ if args.plot == True or (args.load == False and args.plot == False and args.dele
     f1.stdout.close()
     f3,err = f2.communicate()
     fringe_check = f3.split()
-    calibrators = fringe_check + fringe_finder
+    calibrators = fringe_finder
 
     # Delete existing SN tables.
     data_geo.zap_table('SN',-1)

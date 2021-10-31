@@ -68,15 +68,15 @@ def main():
         for expclass in ["UVDATA"]:
             for disk in range(len(AIPS.disks)-1):
                 for seq in range(2):
-                    indata = AIPSUVData(args.experiment+ftype,expclass,disk+1,seq+1)
+                    indata = AIPSUVData(args.experiment.upper()+ftype,expclass,disk+1,seq+1)
                     if indata.exists(): 
-                        if args.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
+                        if args.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment.upper()+ftype,expclass,disk+1,seq+1))
                         success = success + 1
                         break
                     else: 
-                        if args.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment+ftype,expclass,disk+1,seq+1))
+                        if args.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment.upper()+ftype,expclass,disk+1,seq+1))
                         continue
-    if success<=0: sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment,args.aipsid))
+    if success<=0: sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment.upper(),args.aipsid))
     else: 
         if args.verbosity>0: print("Found files in {}, continuing...".format(args.aipsid))
         pass
@@ -85,15 +85,15 @@ def main():
     '''
         Check whether data has been calibrated sufficiently
     '''
-    if AIPSUVData(args.experiment+"_L","UVDATA",1,2).exists():
-        if args.verbosity>0: print("Found file {}.UVDATA.1.2".format(args.experiment+"_L"))
-        indata = AIPSUVData(args.experiment+"_L","UVDATA",1,2)
+    if AIPSUVData(args.experiment.upper()+"_L","UVDATA",1,2).exists():
+        if args.verbosity>0: print("Found file {}.UVDATA.1.2".format(args.experiment.upper()+"_L"))
+        indata = AIPSUVData(args.experiment.upper()+"_L","UVDATA",1,2)
 
-    elif AIPSUVData(args.experiment+"_L","UVDATA",2,2).exists():
-        if args.verbosity>0: print("Found file {}.UVDATA.2.2".format(args.experiment+"_L"))
-        indata = AIPSUVData(args.experiment+"_L","UVDATA",2,2)
+    elif AIPSUVData(args.experiment.upper()+"_L","UVDATA",2,2).exists():
+        if args.verbosity>0: print("Found file {}.UVDATA.2.2".format(args.experiment.upper()+"_L"))
+        indata = AIPSUVData(args.experiment.upper()+"_L","UVDATA",2,2)
 
-    else: sys.exit("Cannot find CVELed data {}.UVDATA.*.2".format(args.experiment+"_L"))
+    else: sys.exit("Cannot find CVELed data {}.UVDATA.*.2".format(args.experiment.upper()+"_L"))
 
     try:
         check_sncl(indata,4,8)
@@ -128,13 +128,18 @@ def main():
     '''
         For each valid split file, we are going to image it.
     '''
+    orig_stdout = sys.stdout
+    null = open(os.devnull, 'w')
     for cal_split in cdata:
         if AIPSImage(cal_split.name,"ILC001",1,args.seq).exists():
-            if args.verbosity>0: print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
+            if args.verbosity>0: 
+                print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
             AIPSImage(cal_split.name,"ILC001",1,args.seq).zap()
+        sys.stdout = null
         _image(cal_split,args.niter,args.gain,args.cell,args.imsize,args.seq)
+        sys.stdout = orig_stdout
         if not args.nozap>0: _zapbeam(cal_split.name,args.seq)
-    
+        
 
     '''
         Now to look for peaks in the emission, store values and RMS.
@@ -142,14 +147,17 @@ def main():
     '''
 
     X, Y  = np.meshgrid(np.arange(1,args.imsize+.5,1),np.arange(1,args.imsize+.5,1))
-    x   = np.zeros(shape=(len(cdata),))
-    y   = np.zeros(shape=(len(cdata),))
-    snr = np.zeros(shape=(len(cdata),))
+    x     = np.zeros(shape=(len(cdata),))
+    y     = np.zeros(shape=(len(cdata),))
+    snr   = np.zeros(shape=(len(cdata),))
     i=-1
+    print ''
     for cal_split in cdata:
         i=i+1
-        if AIPSImage(cal_split.name,"ICL001",1,args.seq).exists(): wim = WAIPSImage(cal_split.name,"ICL001",1,args.seq)
-        else: continue
+        if AIPSImage(cal_split.name,"ICL001",1,args.seq).exists(): 
+            wim = WAIPSImage(cal_split.name,"ICL001",1,args.seq)
+        else: 
+            continue
         wim.squeeze()
         rms = 3*wim.pixels.std()
         if rms>wim.header.datamax: continue
@@ -159,6 +167,9 @@ def main():
         snr[i] = wim.header.datamax/rms
         x[i]   = ew[ind]
         y[i]   = ns[ind]
+        print("{} {} {}".format(wim.name,ew[ind][0],ns[ind][0]))
+
+
         if args.delete>0: wim.zap()
     
     x_off1 = (x*snr**1).sum()/((snr**1).sum())
@@ -167,10 +178,10 @@ def main():
     x_off2 = (x*snr**2).sum()/((snr**2).sum())
     y_off2 = (y*snr**2).sum()/((snr**2).sum())
 
-    print('\n#############################################\n')
-    print("    Shift is ra={0:+6.4f}, dec={1:+6.4f}".format(-x_off2, -y_off2))
+    print('\n#############################################')
+    print(" Target shift is ra={0:+6.4f}, dec={1:+6.4f}".format(-x_off2, -y_off2))
     print("    Add shift as given to maser pos_shift")
-    print('\n#############################################\n')
+    print('#############################################\n')
 
 ###################################################
 ### AIPS TASKS DEFINITIONS
