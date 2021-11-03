@@ -121,7 +121,6 @@ def get_plots(data):
     data.clrstat()
     possm.nplots=0
     possm.stokes='HALF'
-   #possm.aparm[1:]=[1,2,3,4,5,6,7,8,9,10]
     possm.aparm[1:]=[0,1,0,0,0,0,0,0,1, 0]
     possm.flagver=0
     possm.sources[1]=source

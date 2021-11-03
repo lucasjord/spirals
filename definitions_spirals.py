@@ -2421,7 +2421,7 @@ def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, 
 
 ##############################################################################
 #
-def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,baselines=[0],timer=[0]):
+def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,baselines=[0],timer=[0],gainu=0):
 
     if imna=='':
         outname=source
@@ -2456,6 +2456,7 @@ def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,ba
     imagr.bmaj         = beam[0]
     imagr.bmin         = beam[1]
     imagr.bpa          = beam[2]
+    imagr.gainuse      = gainu
     imagr()
 
 
@@ -2489,7 +2490,7 @@ def rungridimagr(indata,source,niter,cz,iz,docal,uvwtfn,robust,beam):
 ##############################################################################
 #
 def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam,
-    baselines=[0],timer=[0]):
+    baselines=[0],timer=[0],gainu=0):
 
     if imna=='':
         outname = source
@@ -2524,6 +2525,7 @@ def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam,
     imagr.bpa          = beam[2]
     imagr.timer[1:]    = timer
     imagr.baseline[1:] = baselines
+    imagr.gainuse      = gainu
     imagr()
 
 ##############################################################################
@@ -5593,6 +5595,13 @@ if ma_fringe_flag==1 and line != cont:
         line_data2.clrstat()
         check_sncl(line_data2, 3, 7,logfile)
 
+    # delete infile for 360 phase offsets
+    if os.path.exists('multiview/phase_unwrapper.inp'):
+        os.remove('multiview/phase_unwrapper.inp')
+    # delete infile for struct quasar phases
+    if os.path.exists('multiview/struct_phase.inp'):
+        os.remove('multiview/struct_phase.inp')
+
     check_sncl(line_data, 3, 7,logfile)
     check_sncl(cont_data, 3, 7,logfile)
 
@@ -5815,7 +5824,7 @@ if imv_prep_flag==1:
     runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
 
     runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
-    #runcalib(line_data2,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel)
+    runcalib(line_data2,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant)
 
     make_multiviewcontrol(cont_data2,line_data2,mv_window=mvwin)
 
@@ -5824,13 +5833,28 @@ if imv_prep_flag==1:
     replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
 
     if os.path.exists('./multiview/target.TBOUT'): os.remove('./multiview/target.TBOUT')
-    runtbout(line_data2,'SN',4,'./multiview/target.TBOUT')
+    runtbout(line_data2,'SN',5,'./multiview/target.TBOUT')
     replace('./multiview/target.TBOUT',"'INDE'",'-999.9')
+
+    # make empty infile for 360 phase offsets
+    if not os.path.exists('multiview/phase_unwrapper.inp'):
+        with open('multiview/phase_unwrapper.inp','w+') as f:
+            for ant in get_ant(line_data2).keys():
+                print >> f, ant,
+                for s in np.zeros(shape=len(target)): print >> f, s,
+                print >> f
+    # make empty infile for quasar strcture phase
+    if not os.path.exists('multiview/struct_phase.inp'):
+        with open('multiview/struct_phase.inp','w+') as f:
+            for ant in get_ant(line_data2).keys():
+                print >> f, ant,
+                for s in np.zeros(shape=len(target)): print >> f, s,
+                print >> f
 
 if imultiv_flag==1:
     if line_data2.exists(): 
         line_data2.clrstat()
-        check_sncl(line_data2, 4, 8,logfile)
+        check_sncl(line_data2, 5, 8,logfile)
 
     calsource = findcal(line_data2, calsource)
 
@@ -5838,6 +5862,9 @@ if imultiv_flag==1:
         sys.exit('./multiview directory does not exist. Run with imv_prep_flag first.')
 
     os.chdir('./multiview/')
+
+    #if os.path.exists('target.TBIN2'):
+    #    os.remove('target.TBIN2')
     mv_task = os.system(mv_path+'multiview_4x > multiview_4x.prt')
     if mv_task==0:
         print 'MULTV: Appears to have ended successfully'
@@ -5847,15 +5874,112 @@ if imultiv_flag==1:
         raise ValueError
 
     os.chdir('../')
+    # do second fit by unwrapping the phase, applying offsets and potential quasar structure phase
+    ants    = get_ant(line_data2)
+    Nquas   = len(target)
+    phase_uwraps    = splitt(get_file('multiview/phase_unwrapper.inp'))[:,1:].astype(float)
+    quas_str_phase  = splitt(get_file('multiview/struct_phase.inp'))[:,1:].astype(float)
+    L, P, content   = [], [], []
+    # make structure matrix
+    xy     = np.matrix(splitt(get_file('multiview/multiview_control.inp')[9:])[:,(0,2,3)].astype(float))
+    x      = xy[:,1]; y = xy[:,2]; xy[:,0] = 1
+    m      = np.ones(shape=(Nquas,3))
+    m[:,1] = np.array(x).reshape(Nquas) 
+    m[:,2] = np.array(y).reshape(Nquas) 
+    M      = np.matrix(m); 
+    D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
+    #
+    count  = 0 #start data count at zero
+    for n in ants.keys():
+        # use the outprint of the fortran programme as it has already done the work 
+        z = splitt(get_file('multiview/fort.1{}'.format(n))[2:]).astype(float)  # qso data
+        f = splitt(get_file('multiview/fort.20{}'.format(n))[1:]).astype(float) # mark fit
+        #
+        t = z[:,1]               #time
+        p = np.matrix(z[:,3::2]) #phase
+        #    
+        # unwrapping phase
+        correction = np.zeros(shape=(len(t),Nquas))
+        qstruct    = np.zeros(shape=(len(t),Nquas))
+        itr = 0 #limit iteration incase of infinte loop
+        while (np.any(np.diff(p+correction,axis=0)>179) 
+            and np.any(np.diff(p+correction,axis=0)<-179)) or itr<5:
+            # find phase jumps
+            xd, yd = np.where(np.diff(p+correction+qstruct,axis=0)>179) 
+            xu, yu = np.where(np.diff(p+correction+qstruct,axis=0)<-179)
+            # make phase in same wrap over time (assuming delays are well--calibrated)
+            for i in range(len(xd)):
+                correction[xd[i]+1:,yd[i]] = correction[xd[i]+1:,yd[i]] - 360.0  
+            for i in range(len(xu)):
+                correction[xu[i]+1:,yu[i]] = correction[xu[i]+1:,yu[i]] + 360.0
+            itr = itr + 1    
+        correction  = correction + 360*phase_uwraps[n-1,:] # add user--defined wraps
+        qstruct     = qstruct    + quas_str_phase[n-1,:]     # add user--defined quasar structure phase
+        # store unwrapped input data
+        P.append(p+correction+qstruct)
+        # solve matrix equation
+        lam = np.array(D*(p+correction+qstruct).T)
+        # store parms
+        L.append(lam)
+        if not n==refant:
+            fig, ax = plt.subplots(3,1,figsize=(10,14))
+            ax[0].plot(t*24,p+correction+qstruct,'.');
+            ax[0].set_ylabel(R'Phase (deg)');
+            ax[0].set_xlim([t[0]*24,t[-1]*24]);
+            ax[0].grid(True,axis='y')
+            ax[0].plot(t*24,lam[0].T,'k')
+            ax[0].plot(f[:,1]*24,f[:,3])
+            #
+            ax[1].plot(t*24,np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T,'.');
+            ax[1].set_ylabel(R'Residual Phase (deg)');
+            ax[1].set_xlim([t[0]*24,t[-1]*24]);
+            #
+            ax[2].set_xlim([t[0]*24,t[-1]*24]);
+            ax[2].plot(t*24,lam[1],'r.',zorder=99)
+            ax[2].plot(t*24,lam[2],'b.',zorder=99)
+            ax[2].plot(f[:,1]*24,f[:,4],'x',zorder=98)
+            ax[2].plot(f[:,1]*24,f[:,3],'x',zorder=98)
+            ax[2].legend([R'EW Slope',R'NS Slope'])
+            ax[2].set_ylabel(R'Phase slope (deg/deg)')
+            ax[2].set_xlabel(R'Time UTC (hr)')
+            ax[0].set_title('{}--{}'.format(ants[n],ants[refant]));
+            fig.savefig('multiview/imv_fit_{}-{}.pdf'.format(ants[n],ants[refant]),bbox_inches='tight')
+        # make outfile content
+        for j in range(len(t)):
+            count = count+1
+            content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                    count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
+    # get header from target,TBOUT and replace values 
+    header = get_file('multiview/target.TBOUT')[:158]
+    ender  = get_file('multiview/target.TBOUT')[-1]
+    header[4] = 'NAXIS2  ={:>21.0f} / Number of entries in table'.format(count)
+    header[10]= 'EXTVER  ={:>21.0f} / Version Number of table'.format(7)
+    # print data to target.TBIN2 as SN 7
+    outfile = 'multiview/target.TBIN2'
+    if os.path.exists(outfile): os.remove(outfile)
+    outf = open(outfile,'a+')
+    for line in header:    
+        print >> outf, line
+    outf.close()
+    outf = open(outfile,'a+')
+    for line in content: 
+        print >> outf, line
+    outf.close()
+    outf = open(outfile,'a+')
+    print >> outf, ender
+    outf.close()
 
 if imv_app_flag==1:
     if line_data2.exists(): 
         line_data2.clrstat()
-        check_sncl(line_data2, 4, 8,logfile)
-        
+        check_sncl(line_data2, 5, 8,logfile)
+    
+    # SN6 + CL8 = CL9
     runtbin(line_data2,'./multiview/target.TBIN')
-    runclcal(line_data2,5,8,9,'',1,refant)
-
+    runclcal(line_data2,6,8,9,'',1,refant)
+    runtbin(line_data2,'./multiview/target.TBIN2')
+    runclcal(line_data2,7,8,10,'',1,refant)
+    # SN7 + CL8 = CL10
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
@@ -5863,16 +5987,24 @@ if imv_app_flag==1:
 if imv_imagr_flag==1:
     if line_data2.exists(): 
         line_data2.clrstat()
-        check_sncl(line_data2, 5, 9,logfile)
 
     mprint('######################',logfile)
     mprint('Imaging channel: '+str(channel),logfile)
     mprint('######################',logfile)
 
-    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,'',
-        uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer)
-    _zapbeam(calsource,inseq=1)
-    _zapbeam(calsource,inseq=2)
+    imna1  = '-1IMV'
+    imna2  = '-2IMV'
+    # delete old images
+    if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).exists():
+        AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).zap()
+    if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).exists():
+        AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).zap()
+    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,imna1,
+        uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=9)
+    runmaimagr(line_data2,calsource,niter,cellsize,imsize,channel,1,imna2,
+        uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=10)
+    _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1)
+    _zapbeam(calsource[:11-len(imna2)]+imna2,inseq=1)
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
