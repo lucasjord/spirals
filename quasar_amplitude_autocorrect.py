@@ -1,61 +1,106 @@
+#!/home/observer/anaconda2/bin/ParselTongue
+
 from AIPSData import AIPSUVData
 from AIPS import AIPS
 from AIPSTask import AIPSTask
-import AIPS, os, math, time
-from pylab import *
-import sys, os, random, copy, difflib, re
-import numpy as np
+import AIPS, os, math, time, sys, os, random
+import copy, difflib, re, numpy as np, argparse
 from math import exp, log, pi, atan2
+from numpy.linalg import inv
+
 import pdb
 
 ##############################################################################
 ##############################################################################
 
-# Version 2.0
-
-kla = 'UVDATA'
-seq = 1
-dsk = 1
-
-cltable = 7
+''' 
+Version 3.0
+Written by Lucas Jordan Hyland
+University of Tasmania
+Date 19/10/21
+'''
 
 def main():
-    AIPS.userno,exp=get_experiment()
-    indata = AIPSUVData(exp,kla,dsk,seq)
-    npols  = len(indata.polarizations)
+    print '\n'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("epoch",
+                        help="Experiment code e.g. s006i",
+                        type=str)
+    parser.add_argument("aipsID",
+                        help="AIPS ID, e.g 666",
+                        type=int)
+    parser.add_argument("-c","--cltable",
+                        help="CL table to save corrections to. Default 6",
+                        type=int,default=6)
+    parser.add_argument('-n','--niter',
+                        help='Number of iterations to do. Default 3',
+                        type=int,default=3)
+    parser.add_argument('-s','--source',
+                        help='Calibrator source to match. Default determine automatically.',
+                        type=str, default=None)
+    parser.add_argument('-f','--flux',
+                        help='Flux of the calibrator if known/suspected (Jy). Default 1.0',
+                        type=float,default=1.0)
+    parser.add_argument('-v','--verbose',
+                        help='Increase verbosity.',
+                        action='count',default=0)
+
+    args = parser.parse_args()
+
+    kla = 'UVDATA'; seq = 1; dsk = 1        # hardcoded nominal values
+
+    AIPS.userno = args.aipsID
+    exp         = args.epoch.upper() + '_C'    #get_experiment()
+    indata      = AIPSUVData(exp,kla,dsk,seq)
+    npols       = len(indata.polarizations)
     if not indata.exists():
         sys.exit(indata+' in AIPSID='+str(AIPS.userno)+' does not exist')
     else:
         print str(indata)+' does exist'
-    while indata.table_highver('CL')>7:
+    while indata.table_highver('CL')>args.cltable:
         tab = indata.table_highver('CL')
         indata.zap_table('CL',tab)
-    get_plots(indata)
-    indata.zap_table('PL',-1)
-    if not 'indata' in globals(): globals().update({'indata':indata})
-    if    npols==1: W, baselines_key = read_in_data_1pol(indata)
-    elif  npols==2: W, baselines_key = read_in_data_2pol(indata)
-    else: sys.exit('Unknown polarization configuration')
-    polz = {}
-    for i in range(npols):
-        polz.update({i:indata.polarizations[i]})
-    ifs = indata.header['naxis'][3]
-    ant_key, epsilon = calculate_offsets(indata,W,baselines_key)
-    clcorprm = (epsilon + 1).tolist()
-    for ant in range(len(ant_key)):
-        for freq in range(ifs):
-            for pol in range(npols):
-                if not cla=='SPLIT':
-                    clcor(data=indata,bif=freq+1,ant=int(ant_key[ant]+1),
-                        clcorprm=clcorprm[ant][freq+pol*ifs],polar=polz[pol],cltable=cltable)
-                else:
-                    sncor(indata,freq+1,int(ant_key[ant]+1),clcorprm[ant][freq+pol*ifs],polz[pol])
-
-    for ant in range(len(ant_key)):
-        for freq in range(ifs):
-            for pol in range(npols):
-                print ant+1, freq+1,clcorprm[ant][freq+pol*ifs]    
-
+    # redirect stdout to null while doing aips stuff
+    old_stdout = sys.stdout
+    null = open(os.devnull,'w')
+    n = 0
+    print ''
+    print '{:3s} {:20s}'.format('Ant:','Correction factors')
+    while n<=args.niter:
+        sys.stdout = null
+        get_plots(indata)
+        indata.zap_table('PL',-1)
+        if not 'indata' in globals(): globals().update({'indata':indata})
+        if    npols==1: W, baselines_key = read_in_data_1pol(indata)
+        elif  npols==2: W, baselines_key = read_in_data_2pol(indata)
+        else: sys.exit('Unknown polarization configuration')
+        polz = {}
+        for i in range(npols):
+            polz.update({i:indata.polarizations[i]})
+        ifs = indata.header['naxis'][3]
+        ant_key, epsilon = calculate_offsets(indata,W,baselines_key,args)
+        clcorprm = (epsilon + 1).tolist()
+        for ant in range(len(ant_key)):
+            for freq in range(ifs):
+                for pol in range(npols):
+                    if not kla=='SPLIT':
+                        clcor(data=indata,bif=freq+1,ant=int(ant_key[ant]+1),
+                            clcorparm=clcorprm[ant][freq+pol*ifs],polar=polz[pol],cltable=args.cltable)
+                    else:
+                        sncor(indata,freq+1,int(ant_key[ant]+1),clcorprm[ant][freq+pol*ifs],polz[pol])
+        #
+        sys.stdout = old_stdout
+        #
+        for ant in range(len(ant_key)):
+            print '{:3.0f}:'.format(ant+1),
+            for freq in range(ifs):
+                for pol in range(npols):
+                    print '{:4.2f}'.format(clcorprm[ant][freq+pol*ifs]),
+            print ''    
+        print ''
+        n = n + 1
+    #
     s, tm = get_best_sources(indata)
     print '#################################'
     print ' Please check possm on '+s
@@ -76,7 +121,6 @@ def get_plots(data):
     data.clrstat()
     possm.nplots=0
     possm.stokes='HALF'
-   #possm.aparm[1:]=[1,2,3,4,5,6,7,8,9,10]
     possm.aparm[1:]=[0,1,0,0,0,0,0,0,1, 0]
     possm.flagver=0
     possm.sources[1]=source
@@ -170,7 +214,7 @@ def read_in_data_2pol(indata):
     W = np.matrix(averaged_data)    # flux matrix
     return W, baselines
 
-def calculate_offsets(data,W_matrix,antenna_key):
+def calculate_offsets(data,W_matrix,antenna_key,args):
     ant_map = np.array(range(len(data.antennas)))
     m = np.zeros(shape=(len(antenna_key),len(data.antennas))).tolist()
     for i in range(len(antenna_key)):
@@ -190,7 +234,7 @@ def calculate_offsets(data,W_matrix,antenna_key):
         tmpP = inv(P)
     except LinAlgError:
         sys.exit('Offset Matrix is singular, cannot invert')
-    S = match_source(data)
+    S = args.flux #match_source(data)
     reweight = 0
     #look for missing or flagged data via IF (doesn't work right now)
     if reweight==1:
@@ -324,14 +368,15 @@ def splitt(old_list):
 
 def get_experiment():
     files = os.listdir('./')
-    reffile = []
+    ref = []
     for i in range(len(files)):
         if "LST" in files[i]:
-            reffile += [files[i]]
-    if reffile==[]:
+            ref += [files[i]]
+    if ref==[]:
         sys.exit('No AIPS output file to read from')
+    reffile = [s for s in ref if "_C" in s]
     if len(reffile)>1:
-        print 'Multiple experiments detected, please indicate which one'
+        print 'Multiple possibilities detected, please indicate which one'
         print reffile
         for i in range(len(reffile)): print str(i+1),
         choice = raw_input('??\n')
@@ -342,7 +387,7 @@ def get_experiment():
         readfile = get_file(reffile[index])
     else:
         readfile = get_file(reffile[0])
-    aipsid   = readfile[0].split()[2]
+    aipsid   = readfile[1].split()[-1].strip('=')
     experiment = readfile[1].split()[2]
     return int(aipsid), experiment
 
@@ -355,7 +400,7 @@ def get_best_sources(data):
         best_src = get_file('%s.%s-ampcal.dat' % (data.name,data.klass))[0].split()[0]
         best_time= make_int(re.split(']',get_file('%s.%s-ampcal.dat' % (data.name,data.klass))[0].replace('[',']'))[-2].split(','))
     except IOError:
-        print 'Using BeSSeL'
+        #print 'Using BeSSeL'
         #let the bessel script output do the hard lifting here
         best_src = get_file('%s.%s-qual.dat' % (data.name,data.klass))[0].split()[0]
         best_time= make_int(re.split(']',get_file('%s.%s-qual.dat' % (data.name,data.klass))[0].replace('[',']'))[-2].split(','))
@@ -439,7 +484,7 @@ def match_source(data):
     try:
         flux = flux_catalogue[difflib.get_close_matches(source, s)[0]]
     except (IndexError,TypeError) as e:
-        flux = float(raw_input('Unknown flux for '+source+'. Please input (Jy)...\n'))
+        flux = 1.0 #float(raw_input('Unknown flux for '+source+'. Please input (Jy)...\n'))
     return flux
 
 ##############################################################################

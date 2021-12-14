@@ -1,0 +1,174 @@
+    1.0000                              ! data format (0=old; 1=new)      
+   30.0000                              ! number interations              
+    0.5000                              ! loop gain                       
+    0.0000                              ! debug print out level           
+2020 10  9                             ! yyyy mm dd                      
+6.6360D+09                              ! observing freq (Hz)             
+    3.0000    0.0030    1.0000          ! del err(cm); rate err(Hz); re-wt
+193519.762                              ! Reference UT_mid(hhmmss)        
+    0.6200    0.7400                    ! Block 1 UT range (days)         
+    0.7400    0.8700                    ! Block 2 UT range (days)         
+    0.8700    0.9900                    ! Block 3 UT range (days)         
+    0.9900    1.0400                    ! Block 4 UT range (days)         
+    0.0000    0.0000                    ! Block 5 UT range (days)         
+    0.0000    0.0000                    ! Block 6 UT range (days)         
+    0.0000    0.0000                    ! Block 7 UT range (days)         
+    0.0000    0.0000                    ! Block 8 UT range (days)         
+    0.0000    0.0000                    ! Block 9 UT range (days)         
+    0.0000    0.0000                    ! Block10 UT range (days)         
+    0.0000         0                    ! A1 C(cm)
+    0.0000         0                    ! A2 C(cm)
+  -23.5843         1                    ! A3 C(cm)
+   26.0257         1                    ! A4 C(cm)
+   28.5664         1                    ! A5 C(cm)
+    0.0000         0                    ! A6 C(cm)
+    0.0000         0                    ! A7 C(cm)
+    0.0000         0                    ! A8 C(cm)
+    0.0000         0                    ! A9 C(cm)
+    0.0000         0                    ! A10C(cm)
+    0.0000         0                    ! A11C(cm)
+    0.0000         0                    ! A12C(cm)
+    0.0000         0                    ! A1 Rcm/h
+    0.0000         0                    ! A2 Rcm/h
+    8.4405         1                    ! A3 Rcm/h
+    0.5776         1                    ! A4 Rcm/h
+   -2.5471         1                    ! A5 Rcm/h
+    0.0000         0                    ! A6 Rcm/h
+    0.0000         0                    ! A7 Rcm/h
+    0.0000         0                    ! A8 Rcm/h
+    0.0000         0                    ! A9 Rcm/h
+    0.0000         0                    ! A10Rcm/h
+    0.0000         0                    ! A11Rcm/h
+    0.0000         0                    ! A12Rcm/h
+    0.0000         0                    ! A1 Ac/h2
+    0.0000         0                    ! A2 Ac/h2
+    0.0000         0                    ! A3 Ac/h2
+    0.0000         0                    ! A4 Ac/h2
+    0.0000         0                    ! A5 Ac/h2
+    0.0000         0                    ! A6 Ac/h2
+    0.0000         0                    ! A7 Ac/h2
+    0.0000         0                    ! A8 Ac/h2
+    0.0000         0                    ! A9 Ac/h2
+    0.0000         0                    ! A10Ac/h2
+    0.0000         0                    ! A11Ac/h2
+    0.0000         0                    ! A12Ac/h2
+    0.0000         0                    ! A1 B1 cm
+    4.7956         1                    ! A2 B1 cm
+   10.1346         1                    ! A3 B1 cm
+  -14.8936         1                    ! A4 B1 cm
+   -1.2074         1                    ! A5 B1 cm
+    0.0000         0                    ! A6 B1 cm
+    0.0000         0                    ! A7 B1 cm
+    0.0000         0                    ! A8 B1 cm
+    0.0000         0                    ! A9 B1 cm
+    0.0000         0                    ! A10B1 cm
+    0.0000         0                    ! A11B1 cm
+    0.0000         0                    ! A12B1 cm
+    0.0000         0                    ! A1 B2 cm
+    4.1565         1                    ! A2 B2 cm
+    9.0016         1                    ! A3 B2 cm
+  -15.4611         1                    ! A4 B2 cm
+   -3.1401         1                    ! A5 B2 cm
+    0.0000         0                    ! A6 B2 cm
+    0.0000         0                    ! A7 B2 cm
+    0.0000         0                    ! A8 B2 cm
+    0.0000         0                    ! A9 B2 cm
+    0.0000         0                    ! A10B2 cm
+    0.0000         0                    ! A11B2 cm
+    0.0000         0                    ! A12B2 cm
+    0.0000         0                    ! A1 B3 cm
+    3.6435         1                    ! A2 B3 cm
+    2.8543         1                    ! A3 B3 cm
+  -11.9730         1                    ! A4 B3 cm
+   -5.7392         1                    ! A5 B3 cm
+    0.0000         0                    ! A6 B3 cm
+    0.0000         0                    ! A7 B3 cm
+    0.0000         0                    ! A8 B3 cm
+    0.0000         0                    ! A9 B3 cm
+    0.0000         0                    ! A10B3 cm
+    0.0000         0                    ! A11B3 cm
+    0.0000         0                    ! A12B3 cm
+    0.0000         0                    ! A1 B4 cm
+   12.6324         1                    ! A2 B4 cm
+    5.3479         1                    ! A3 B4 cm
+   -8.4715         1                    ! A4 B4 cm
+   -2.3592         1                    ! A5 B4 cm
+    0.0000         0                    ! A6 B4 cm
+    0.0000         0                    ! A7 B4 cm
+    0.0000         0                    ! A8 B4 cm
+    0.0000         0                    ! A9 B4 cm
+    0.0000         0                    ! A10B4 cm
+    0.0000         0                    ! A11B4 cm
+    0.0000         0                    ! A12B4 cm
+    0.0000         0                    ! A1 B5 cm
+    0.0000         0                    ! A2 B5 cm
+    0.0000         0                    ! A3 B5 cm
+    0.0000         0                    ! A4 B5 cm
+    0.0000         0                    ! A5 B5 cm
+    0.0000         0                    ! A6 B5 cm
+    0.0000         0                    ! A7 B5 cm
+    0.0000         0                    ! A8 B5 cm
+    0.0000         0                    ! A9 B5 cm
+    0.0000         0                    ! A10B5 cm
+    0.0000         0                    ! A11B5 cm
+    0.0000         0                    ! A12B5 cm
+    0.0000         0                    ! A1 B6 cm
+    0.0000         0                    ! A2 B6 cm
+    0.0000         0                    ! A3 B6 cm
+    0.0000         0                    ! A4 B6 cm
+    0.0000         0                    ! A5 B6 cm
+    0.0000         0                    ! A6 B6 cm
+    0.0000         0                    ! A7 B6 cm
+    0.0000         0                    ! A8 B6 cm
+    0.0000         0                    ! A9 B6 cm
+    0.0000         0                    ! A10B6 cm
+    0.0000         0                    ! A11B6 cm
+    0.0000         0                    ! A12B6 cm
+    0.0000         0                    ! A1 B7 cm
+    0.0000         0                    ! A2 B7 cm
+    0.0000         0                    ! A3 B7 cm
+    0.0000         0                    ! A4 B7 cm
+    0.0000         0                    ! A5 B7 cm
+    0.0000         0                    ! A6 B7 cm
+    0.0000         0                    ! A7 B7 cm
+    0.0000         0                    ! A8 B7 cm
+    0.0000         0                    ! A9 B7 cm
+    0.0000         0                    ! A10B7 cm
+    0.0000         0                    ! A11B7 cm
+    0.0000         0                    ! A12B7 cm
+    0.0000         0                    ! A1 B8 cm
+    0.0000         0                    ! A2 B8 cm
+    0.0000         0                    ! A3 B8 cm
+    0.0000         0                    ! A4 B8 cm
+    0.0000         0                    ! A5 B8 cm
+    0.0000         0                    ! A6 B8 cm
+    0.0000         0                    ! A7 B8 cm
+    0.0000         0                    ! A8 B8 cm
+    0.0000         0                    ! A9 B8 cm
+    0.0000         0                    ! A10B8 cm
+    0.0000         0                    ! A11B8 cm
+    0.0000         0                    ! A12B8 cm
+    0.0000         0                    ! A1 B9 cm
+    0.0000         0                    ! A2 B9 cm
+    0.0000         0                    ! A3 B9 cm
+    0.0000         0                    ! A4 B9 cm
+    0.0000         0                    ! A5 B9 cm
+    0.0000         0                    ! A6 B9 cm
+    0.0000         0                    ! A7 B9 cm
+    0.0000         0                    ! A8 B9 cm
+    0.0000         0                    ! A9 B9 cm
+    0.0000         0                    ! A10B9 cm
+    0.0000         0                    ! A11B9 cm
+    0.0000         0                    ! A12B9 cm
+    0.0000         0                    ! A1 B10cm
+    0.0000         0                    ! A2 B10cm
+    0.0000         0                    ! A3 B10cm
+    0.0000         0                    ! A4 B10cm
+    0.0000         0                    ! A5 B10cm
+    0.0000         0                    ! A6 B10cm
+    0.0000         0                    ! A7 B10cm
+    0.0000         0                    ! A8 B10cm
+    0.0000         0                    ! A9 B10cm
+    0.0000         0                    ! A10B10cm
+    0.0000         0                    ! A11B10cm
+    0.0000         0                    ! A12B10cm
