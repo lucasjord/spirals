@@ -34,6 +34,10 @@ def main():
     parser.add_argument('tec_map',
                         help='jplg TEC map e.g. jplgDDD0.YYi',
                         type=str)
+    parser.add_argument('--ra',help='Right Ascension of target (decimal hourangle)',
+                        type=float,default=None)
+    parser.add_argument('--dec',help='Declination of target (decimal deg)',
+                        type=float,default=None)
     parser.add_argument('-m','--maser',
                         help='Maser number or name e.g. G232.62 or s1',default='G232.62')
     parser.add_argument('-l','--lower',
@@ -42,6 +46,8 @@ def main():
                         help='Highest TEC to show', type=float,default=40)
     parser.add_argument('-R','--rms',
                         help='Do RMS instead of total', action="count",default=0)
+
+
     args = parser.parse_args()
 
     '''
@@ -49,12 +55,17 @@ def main():
     '''
     t, longi, lati, tec, rms = read_jpltec(args.tec_map)
     '''
+    First check if NOT ra AND dec specified,
+     else
     Get maser of interest. Defaults to G232.62 aka s1 at the moment.
     '''
-    maser  = get_maser(args.maser)
-    source = SkyCoord(ra=maser.ra,dec=maser.dec,unit=(u.hourangle,u.deg))
-    gst    = 15*t.sidereal_time('apparent').value
+    if args.ra==None and args.dec==None:
+        maser  = get_maser(args.maser)
+        source = SkyCoord(ra=maser.ra,dec=maser.dec,unit=(u.hourangle,u.deg))
+    else:
+        source = SkyCoord(ra=args.ra,dec=args.dec,unit=(u.hourangle,u.deg))
     
+    gst    = 15*t.sidereal_time('apparent').value
     # deletes old animations if they exist (they shouldn't)
     try:
         animate1.event_source.stop()
