@@ -55,9 +55,10 @@
 # 2021/03/19 Changed cvel to use input or middle channel of band, now        #
 #            seperate channel to fringe fitting - LJH                        #
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
+# 2021/11/30 Added run_wa_pang routine - LJH                                 #
 ##############################################################################
 
-version_date='2021/10/03'
+version_date='2021/11/30'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -69,6 +70,8 @@ from pylab import *
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u, fileinput
+from astropy.time import Time as aTime
+
 
 import pdb #debugger
 
@@ -321,11 +324,11 @@ def get_eop(eop_path):
 
 ##############################################################################
 #
-def runeops(indata, eop_path):
+def runeops(indata, eop_path, cl_in=2, cl_out=3):
     eops        = AIPSTask('CLCOR')
     eops.indata = indata
-    eops.gainver = 2
-    eops.gainuse = 3
+    eops.gainver = cl_in
+    eops.gainuse = cl_out
     eops.opcode  = 'EOPS'
     eops.infile  = eop_path+'usno_finals.erp'
     eops()
@@ -2195,21 +2198,21 @@ def plotionos(inter_flag, logfile):
 
 ##############################################################################
 #
-def runatmos(indata, atmos_file):
+def runatmos(indata, atmos_file, cl_in=2, cl_out=3):
     atmos              = AIPSTask('CLCOR')
     atmos.indata       = indata
-    atmos.gainver      = 3
-    atmos.gainuse      = 4
+    atmos.gainver      = cl_in
+    atmos.gainuse      = cl_out
     atmos.clcorprm[1:] = [1,0]
     atmos.opcode       = 'ATMO'
     atmos.infile       = 'PWD:'+atmos_file
     atmos()
 
-def runionos(indata, ionos_file):
+def runionos(indata, ionos_file, cl_in=3, cl_out=3):
     atmos              = AIPSTask('CLCOR')
     atmos.indata       = indata
-    atmos.gainver      = 4
-    atmos.gainuse      = 4
+    atmos.gainver      = cl_in
+    atmos.gainuse      = cl_out
     atmos.clcorprm[1:] = [1,0]
     atmos.opcode       = 'IONO'
     atmos.infile       = 'PWD:'+ionos_file
@@ -2217,39 +2220,145 @@ def runionos(indata, ionos_file):
 
 ##############################################################################
 #
-def runpang(indata):
+def runpang(indata,cl_in=4,cl_out=4):
     pang              = AIPSTask('CLCOR')
     pang.indata       = indata
-    pang.gainver      = 4
-    pang.gainuse      = 4
+    pang.gainver      = cl_in
+    pang.gainuse      = cl_out
     pang.opcode       = 'PANG'
     pang.clcorprm[1:] = [1,0]
-    #antennas          = []
-    # the next bit is to deal with HB,KE,YG being linear
-    #for row in indata.table('AN', 0):
-    #    if row['mntsta']==0:
-    #        if not row['anname'].replace(' ','') in ('HB','KE'):
-    #            antennas.append(row['nosta'])
-    #pang.antennas[1:] = antennas
     pang()
 
 ##############################################################################
 #
-def runpang2(indata):
+def runpang2(indata,cl_in=3,cl_out=4):
     pang        = AIPSTask('CLCOR')
     pang.indata = indata
-    pang.gainver = 3
-    pang.gainuse = 4
+    pang.gainver = cl_in
+    pang.gainuse = cl_out
     pang.opcode  = 'PANG'
     pang.clcorprm[1:] = [1,0]
-    #antennas          = []
-    # the next bit is to deal with HB,KE,YG being linear
-    #for row in indata.table('AN', 0):
-    #    if row['mntsta']==0:
-    #        if not row['anname'].replace(' ','') in ('HB','KE'):
-    #            antennas.append(row['nosta'])
-    #pang.antennas[1:] = antennas
+    antennas          = []
+    pang.antennas[1:] = antennas
     pang()
+
+##############################################################################
+#
+class telescope:
+    def __init__(self, name, lat, long):
+        self.lat  = lat   # deg
+        self.long = long  # deg
+        self.name = name
+
+def run_wa_pang(indata,refant,cl_in=3,cl_out=4):
+    '''
+    Apply feed rotation corrections for Warkworth30m being 
+    beam-waveguide/Naysmith + 6x'parascope' mirrors 
+    - LJH 2021/11/30 
+    '''
+    if len(indata.stokes)==1:
+        print '##################################'
+        print 'WA only has a single pol, skipping'
+        print '##################################'
+        return
+    wa_num  = indata.antennas.index('WA') + 1
+    wa      = telescope('WA',-36.43316,174.66295)
+    L       = wa.lat*u.deg.to(u.rad)  # this step incase needs to be changed to another antenna
+    wizdata = WAIPSUVData(indata.name,indata.klass,indata.disk,indata.seq)
+    
+    ## make SU tables and get visibilities with Wizardry
+    print 'WAPANG: Getting source RA/DECs.'
+    su = [{s.id__no:[s.raapp,s.decapp]} for s in indata.table('SU',1)]
+    SU = {}
+    for s in su: SU.update(s) #making SU dictionary
+    
+    print 'WAPANG: Getting visibilities using wizardry.'
+    vis = []
+    for v in wizdata:
+        if v.baseline[0]==v.baseline[1]:
+            vis += [[v.baseline[0],v.time]+SU[v.source]+[v.source,v.inttim]]
+    V = np.array(vis)
+    t, ra, dec, sid, dt = V[V[:,0]==wa_num,1:].T.tolist() 
+    # time (fday), ra (deg), dec (deg), sourceID, int time (sec)
+    
+    ## getting start time and convert to LST
+    start = aTime(datetime.datetime.strptime(indata.header['date_obs'],'%Y-%m-%d'))
+    T = start + t*u.day
+    T.delta_ut1_utc = 0. # doing this to suppress errors. Might be bad #yolo
+    print 'WAPANG: Calculating WA sidereal time.'
+    st = T.sidereal_time('mean',longitude=wa.long*u.deg).value
+    
+    ## calculate hour angle
+    print 'WAPANG: Calculating hour angle.'
+    ha_rad = (st*u.hourangle).to(u.rad)-(ra*u.deg).to(u.rad)
+    
+    ## calculate elevation angle
+    print 'WAPANG: Calculating azimuth angle.'
+    sine = sin(L)*sin((dec*u.deg).to(u.rad)) + cos(L)*cos((dec*u.deg).to(u.rad))*cos(ha_rad)
+    el   = arcsin(sine)
+
+    ## calculate azimuth angle
+    print 'WAPANG: Calculating elevation angle.'
+    tan_an = -cos((dec*u.deg).to(u.rad))*sin(ha_rad) 
+    tan_ad = ( cos(L)*sin((dec*u.deg).to(u.rad))
+             - sin(L)*cos((dec*u.deg).to(u.rad))*cos(ha_rad) )
+    az     = arctan2(tan_an,tan_ad)
+
+    ## calculate parallactic angle 
+    ## (not needed but might be useful to have here one day)
+    tan_pn = cos(L)*sin(ha_rad)
+    tan_pd = ( sin(L)*cos((dec*u.deg).to(u.rad)) 
+             - cos(L)*sin((dec*u.deg).to(u.rad))*cos(ha_rad) )
+    p = arctan2(tan_pn,tan_pd)
+
+    ## creating correction factor assuming that PANG has already been run
+    ## pang adds/subtracts parallactic angle to az/el antenna pols
+    print 'WAPANG: Calculating feed angle.'
+    feed_angle = ( az - el ).to(u.rad).value
+    #feed_angle = ( -p + az - el ).to(u.deg).value  # if no PANG
+
+    ## going to make SN table to add to Warkworth phase
+    header  = get_file(fit_path+'sn_header.txt') # this is a little dodgy
+    ncpx, nstk, nfrq, nif, nra, ndec, bgs = indata.header['naxis']
+    
+    if nif==1: header[0] = "XTENSION= 'TABLE   '           / extension type"
+    else:      header[0] = "XTENSION= 'BINTABLE'           / extension type"
+
+    header[4] = 'NAXIS2  =              {:>7s} / Number of entries in table'.format(str(len(t)))
+
+    header[68]  = 'TFDIM12 =                   {:2.0f} / Dimension of field 12'.format(nif)
+    header[73]  = 'TFDIM13 =                   {:2.0f} / Dimension of field 13'.format(nif)
+    header[78]  = 'TFDIM14 =                   {:2.0f} / Dimension of field 14'.format(nif)
+    header[83]  = 'TFDIM15 =                   {:2.0f} / Dimension of field 15'.format(nif)
+    header[88]  = 'TFDIM16 =                   {:2.0f} / Dimension of field 16'.format(nif)
+    header[93]  = 'TFDIM17 =                   {:2.0f} / Dimension of field 17'.format(nif)
+    header[113] = 'TFDIM21 =                   {:2.0f} / Dimension of field 21'.format(nif)
+    header[118] = 'TFDIM22 =                   {:2.0f} / Dimension of field 22'.format(nif)
+    header[123] = 'TFDIM23 =                   {:2.0f} / Dimension of field 23'.format(nif)
+    header[128] = 'TFDIM24 =                   {:2.0f} / Dimension of field 24'.format(nif)
+    header[133] = 'TFDIM25 =                   {:2.0f} / Dimension of field 25'.format(nif)
+    header[138] = 'TFDIM26 =                   {:2.0f} / Dimension of field 26'.format(nif)
+
+    header[143] = 'NO_IF   =           {:>2.0f}'.format(nif)
+
+    ## print solutions to file
+    ## then load in with TBIN
+    if os.path.exists('wa_pang.TBIN'): os.remove('wa_pang.TBIN')
+    with open('wa_pang.TBIN','w+') as w:
+        for row in header: print >> w, row
+        for j in range(len(t)):
+            for i in range(nif):
+                if i==0: 
+                    print >> w, '{0:8.0f}{1:>24.15E}{2:>15.6E}{3:>11.0f}{4:>11.0f}{5:>11.0f}{6:>11.0f}{7:>15.3f}{8:>11.0f}{9:>15.3f}{10:>15.3f}{11:>15.3f}{12:>15.6f}{13:>15.6f}{14:>15.3f}{15:>15.3f}{16:>15.3f}{17:>11.0f}{9:>15.3f}{10:>15.3f}{11:>15.3f}{18:>15.6f}{19:>15.6f}{14:>15.3f}{15:>15.3f}{16:>15.3f}{17:>11.0f}'.format(
+                j+1, t[j],dt[j]/(24*3600.),sid[j],4,1,0,0,0,0,0,0,cos( feed_angle[j]),sin( feed_angle[j]),0,0,1,refant,cos(-feed_angle[j]),sin(-feed_angle[j])) 
+                else: 
+                    print >> w, '{0:8.0f}{1:>24s}{1:>15s}{1:>11s}{1:>11s}{1:>11s}{1:>11s}{1:>15s}{1:>11s}{1:>15s}{1:>15s}{1:>15s}{2:>15.6f}{3:>15.6f}{4:>15.3f}{5:>15.3f}{6:>15.3f}{7:>11.0f}{1:>15s}{1:>15s}{1:>15s}{8:>15.6f}{9:>15.6f}{4:>15.3f}{5:>15.3f}{6:>15.3f}{7:>11.0f}'.format(
+                j+1,"''",cos( feed_angle[j]),sin( feed_angle[j]),0,0,1,refant,cos(-feed_angle[j]),sin(-feed_angle[j]))
+        print >> w, '***END*PASS***'
+
+    runtbin(indata,'wa_pang.TBIN') # make SN1
+    runclcal(indata,1,cl_in,cl_out,'',1,refant) # SN1 + CL_IN = CL_OUT 
+    #sys.exit()
 
 ##############################################################################
 #
@@ -5171,10 +5280,10 @@ if geo_prep_flag>0:
             runtacop(geo_data, geo_data, 'CL', 1, 3, 0)
     else:
         if geo_prep_flag==1:
-            runTECOR(geo_data,year,doy,num_days,2,TECU_model)
+            runTECOR(geo_data,year,doy,num_days,2,TECU_model) # CL1-> 2
         else:
             runtacop(geo_data, geo_data, 'CL', 1, 2, 0)
-        runeops(geo_data, eop_path)
+        runeops(geo_data, eop_path) # CL2-> 3
 
     geo_data= data[geo_data_nr]
     sx_geo = False
@@ -5406,10 +5515,10 @@ for i in pr_data_nr:
                 runtacop(pr_data, pr_data, 'CL', 1, 3, 0)
         else:
             if pr_prep_flag==1:
-                runTECOR(pr_data,year,doy,num_days,2,TECU_model)
+                runTECOR(pr_data,year,doy,num_days,2,TECU_model) #CL1 ->2
             else:
                 runtacop(pr_data, pr_data, 'CL', 1, 2, 0)
-            runeops(pr_data, eop_path)
+            runeops(pr_data, eop_path, cl_in=2, cl_out=2) # CL2 ->2
 
         if refant_flag==1:
             refant=select_refant(pr_data)
@@ -5420,12 +5529,20 @@ for i in pr_data_nr:
                 geo_data=data[geo_data_nr]
                 make_name_atmos(geo_data)
                 atmos_file='ATMOS_NAME.FITS'
-            runatmos(pr_data, atmos_file)
+            runatmos(pr_data, atmos_file, cl_in=2, cl_out=3) # CL2 ->3
             if sx_geo==True and dual_geo==1:
                 ionos_file='IONOS_NAME.FITS'
                 make_name_ionos(geo_data)
-                runionos(pr_data, ionos_file)
-            runpang(pr_data)
+                runionos(pr_data, ionos_file) #CL3 -> 3
+            if 'WA' in pr_data.antennas:
+                mprint('####################################',logfile)
+                mprint('Running WAPANG on '+pr_data.name,logfile)
+                mprint('####################################',logfile)
+                run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
+            else:
+                runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
+            #pdb.set_trace()
+            runpang(pr_data) #CL4 -> 4
             for source in pos_shift:
                 [ra, dec] = [pos_shift[source][0],pos_shift[source][1]]
                 if not source in pr_data.sources:
@@ -5445,7 +5562,11 @@ for i in pr_data_nr:
             mprint('####################################',logfile)
             mprint('Using no ATMOS.FITS file',logfile)
             mprint('####################################',logfile)
-            runpang2(pr_data)
+            if 'WA' in pr_data.antennas: 
+                run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
+            else:
+                runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
+            runpang2(pr_data,cl_in=4,cl_out=4) #CL4 -> 4
             for source in pos_shift:
                 [ra, dec] = [pos_shift[source][0],pos_shift[source][1]]
                 if ra!=0 or dec!=0:
@@ -5459,7 +5580,6 @@ for i in pr_data_nr:
                     mprint('####################################'+
                            '################################',logfile)
                     shift_pos(pr_data, source, ra, dec, 4, 4)
-
 
     if apcal_flag==1:
         vla_pres=False
@@ -5788,7 +5908,7 @@ if ma_imagr_flag==1:
                  print split_data.name
                  split_data.rename(split_data.name[0:8],split_data.klass,split_data.seq)
              runmaimagr(split_data, source, niter, cellsize, imsize,channel,
-                        -1, imna, uvwtfn, robust, beam,baselines=ant_bls)
+                        -1, imna, uvwtfn, robust, beam,baselines=ant_bls,gainu=8)
              _zapbeam(split_data.name[0:8])
 
 if cube_imagr_flag==1:
@@ -5903,6 +6023,10 @@ if imv_prep_flag==1:
                 for s in np.zeros(shape=len(target)): print >> f, s,
                 print >> f
 
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
 if imultiv_flag==1:
     if line_data2.exists() and line!=cont: 
         linedata = line_data2
@@ -5932,10 +6056,15 @@ if imultiv_flag==1:
         mprint('##########################################', logfile)
         mprint('MULTV1: Appears to have ended successfully',logfile)
         mprint('##########################################', logfile)
+
     else: 
-        print 'MUTLV: Purports to die of UNNATURAL causes'
+        print 'MUTLV1: Purports to die of UNNATURAL causes'
         print 'Please check input files in ./multiview/'
         raise ValueError
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
 
     os.chdir('../')
     # do second fit by unwrapping the phase, applying offsets and potential quasar structure phase
@@ -5966,20 +6095,29 @@ if imultiv_flag==1:
         # unwrapping phase
         correction = np.zeros(shape=(len(t),Nquas))
         qstruct    = np.zeros(shape=(len(t),Nquas))
-        # new unwrapping technique
+        #
+
+        ''' new unwrapping technique 
+        
+        old way was just to use numpy.diff logic to find large jumps moving forward in time.
+        However, since early times might be low elevation, this often might cause the phase to be unwrapped
+        over the whole track referenced to a point where there was a phase wrap ambiguity. Now I unwrap it close
+        to the centre of the track, where it is most unlikely that a PWA is occurring. Since there can also
+        be large time differences between MVBs, I also treat each block separately. This means there is an extra
+        file for user defined block offsets - LJH
+        '''
+  
+        # determine number of multiview blocks
         mvb_block_boundaries = t[np.where(np.diff(t)*24*30>10)]+15/(24*60)
-
         N = len(mvb_block_boundaries)+1
-
         mprint('Unwrapping '+str(N)+' multiview blocks for antenna '+ants[n], logfile)
-
         nboundaryindx = np.zeros(shape=(N-1,))
         for i in range(N-1):
             nboundaryindx[i] = abs( t - mvb_block_boundaries[i]).argmin()
-
+        
+        # automatically try and unwrap blocks from the 'middle' boundary (re time)
         p2 = np.copy(p)
         for nb in range(N-1):
-            #print(nb)
             if nb==0:
                 # go down from first mbv
                 for j in range(Nquas):    
@@ -6013,21 +6151,21 @@ if imultiv_flag==1:
                         else: dp = 0.0
                         p2[int(1+nboundaryindx[nb]):,j][i+1] = p[int(1+nboundaryindx[nb]):,j][i+1] + dp   
 
-        correction = correction + (p2 - p)
+        correction = correction + (p2 - p) # add in corrections
         ## 
-        # make empty antenna-block-quasar file if it doesn't exist
+        # make empty antenna-block-quasar file if it doesn't exist for user defined offsets
+        # this file will be deleted at the fringe check stage and not overwritten here
         if not os.path.exists('multiview/block_{}_unwrapper.inp'.format(ants[n])):
             with open('multiview/block_{}_unwrapper.inp'.format(ants[n]),'w+') as f:
                 for block in range(N):
                     print >> f, block+1,
                     for s in np.zeros(shape=len(target)): print >> f, s,
                     print >> f
-        ##
+        ## open up file and load in user defined offsets. If file was just created, will only contain zeroes
         blocks_uwraps  = splitt(get_file('multiview/block_{}_unwrapper.inp'.format(ants[n])))[:,1:].astype(float)
         if not blocks_uwraps.shape==(N,Nquas):
             sys.exit('Something wrong with block_unwrapper logic for antenna '+ants[n])
-
-        #pdb.set_trace()
+        # apply offsets to each multiview block
         for nb in range(N):
             if nb==0:
                 correction[:int(nboundaryindx[nb]),:] = correction[:int(nboundaryindx[nb]),:] + 360*blocks_uwraps[nb,:]
@@ -6037,9 +6175,11 @@ if imultiv_flag==1:
                 correction[int(nboundaryindx[nb-1]):int(nboundaryindx[nb])] = correction[int(nboundaryindx[nb-1]):int(nboundaryindx[nb])]+ 360*blocks_uwraps[nb,:]
 
         correction  = correction + 360*phase_uwraps[n-1,:]   # add user--defined wraps
-        qstruct     = qstruct    + quas_str_phase[n-1,:]     # add user--defined quasar structure phase
+        #
+        qstruct     = qstruct    + quas_str_phase[n-1,:]     # add user--defined quasar structure phase (not really used [yet?])
         # store unwrapped input data
         P.append(p+correction+qstruct)
+        
         # solve matrix equation
         lam  = np.array(D*(p+correction+qstruct).T)
         Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
@@ -6077,6 +6217,7 @@ if imultiv_flag==1:
                     count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
     
     # get header from target,TBOUT and replace values 
+
     start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
     header = get_file('multiview/target.TBOUT')[:start+1]
     ender  = get_file('multiview/target.TBOUT')[-1]
@@ -6096,6 +6237,14 @@ if imultiv_flag==1:
     outf = open(outfile,'a+')
     print >> outf, ender
     outf.close()
+    
+    mprint('########################################################', logfile)
+    mprint('MULTV2: Appears to have ended successfully',logfile)
+    mprint('########################################################', logfile)
+    
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
 
     mprint('##########################################', logfile)
     mprint('MULTV2: Appears to have ended successfully',logfile)
