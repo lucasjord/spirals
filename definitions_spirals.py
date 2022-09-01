@@ -573,6 +573,7 @@ def testfringe(indata, refant, flag, logfile):
     fringe.dparm[8]    = 1
     fringe.dparm[4]    = 0
     fringe.snver       = 2
+    fringe.flagver     = 1
     a = indata.sources
     bt = check_geo(indata)
     nb = len(bt)-1
@@ -604,6 +605,7 @@ def geo_man_pcal(indata, refant, logfile):
     fringe.solint   = 6
     fringe.dparm[8] = 1
     fringe.dparm[4] = 0
+    fringe.flagver  = 1
     fringe.snver    = 0
 
     (source,timerange)=get_best_scan(indata, logfile, 'geoqual.dat', 1)

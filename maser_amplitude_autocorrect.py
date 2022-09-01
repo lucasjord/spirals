@@ -40,6 +40,8 @@ e.g.
 
 parseltongue ./amplitude_autocorrect_v3.py G123.56+0.7 2 
 
+
+HAS BEEN EDITED A LITTLE!! - LJH 18/08/22
 '''
 
 # G123.56+0.7  2       
@@ -63,7 +65,9 @@ def main():
         #######1234567890123456789012345678901234567891234567
         print '#################### HELP ####################' 
         print '#                                            #'
-        print '#  Format: parseltongue <script>.py source   #'
+        print '#  Format: parseltongue <script>.py expcode  #'
+        print '#                                   AIPSID   #'
+        print '#                                   source   #'
         print '#                                   refant   #'
         print '#                                            #'
         print '################# PARAMETERS #################'     
@@ -83,17 +87,19 @@ def main():
 
     ### Get reasonable experiment name ###
     logfile = open(sys.argv[0].replace('.py','.log'),'a')
-    AIPS.userno,exp=get_experiment()
+    #AIPS.userno,exp=get_experiment()
+    exp         = sys.argv[1].upper()
+    AIPS.userno = int(sys.argv[2])
     indata = AUV(exp,kla,dsk,seq)
     if not indata.exists():
-        sys.exit(indata+' in AIPSID=\
+        sys.exit(indata.name+' in AIPSID=\
             '+str(AIPS.userno)+' does not exist')
     else: print str(indata)+' does exist'
     ### Make sure we operate on CL1 ###
     CL = indata.table_highver('CL')
     if CL==1: sys.exit('CL1 !! Need to pre-calibrate!')
     ### Check if source is valid ###
-    source   = sys.argv[1]
+    source   = sys.argv[3]
     sources  = indata.sources
     msources = difflib.get_close_matches(source, sources)
     try:
@@ -104,7 +110,7 @@ def main():
     except IndexError:
         sys.exit('No suggested sources, unknown source '+source)
     ### Check if ref antenna is valid ###
-    reference_antenna = int(sys.argv[2])
+    reference_antenna = int(sys.argv[4])
     antable = indata.table('AN',1)
     an = {}
     for row in antable:
