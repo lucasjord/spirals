@@ -34,8 +34,8 @@ def main():
                         help="AIPS USERID e.g. 666. Between 1-46656.",
                         type=int)
     parser.add_argument("-g","--gain",
-                        help="CLEAN loop gain, 0-1. Default 0.3.",
-                        type=float,default=0.3)
+                        help="CLEAN loop gain, 0-1. Default 0.1",
+                        type=float,default=0.1)
     parser.add_argument("-n","--niter",
                         help="Number of CLEAN iterations. Default 200.",
                         type=int,default=200)
@@ -45,7 +45,7 @@ def main():
     parser.add_argument("-i","--imsize",
                         help="Image size in pixels. 256, 512, 1024, 2048 etc. Default 1024.",
                         type=int,default=1024)
-    parser.add_argument("-q","--seq",
+    parser.add_argument("-s","--seq",
                         help="Sequence of created images. Default 99. Will overwrite <seq> images if they exist.",
                         type=int,default=99)
     parser.add_argument("-z","--nozap",
@@ -54,11 +54,13 @@ def main():
     parser.add_argument("-d","--delete",
                         help="Enable to delete ICL001 entries after fitting.",
                         action="count",default=0)
+    parser.add_argument("-D","--disk",
+                        help="Disk where splits are located",
+                        type=int,default=1)
 
     args = parser.parse_args()
 
     AIPS.userno = args.aipsid
-
 
     '''
         First check whether experiment exists in AIPS at given AIPS USER#
@@ -118,11 +120,11 @@ def main():
     '''
     cdata = []   
     for i in range(len(calibrators)):
-        if AIPSUVData(calibrators[i],"SPLIT",1,1).exists():
-            #if args.verbosity>0: print("Found file {}.SPLIT.1.1".format(calibrators[i]))
-            cdata.append(AIPSUVData(calibrators[i],"SPLIT",1,1))
+        if AIPSUVData(calibrators[i],"SPLIT",args.disk,1).exists():
+            if args.verbosity>0: print("Found file {}.SPLIT.{}.1".format(calibrators[i],args.disk))
+            cdata.append(AIPSUVData(calibrators[i],"SPLIT",args.disk,1))
         else:
-            print("Could not find catalogue {}.SPLIT.1.1".format(calibrators[i]))
+            print("Could not find catalogue {}.SPLIT.{}.1".format(calibrators[i]),args.disk)
 
 
     '''
@@ -130,16 +132,21 @@ def main():
     '''
     orig_stdout = sys.stdout
     null = open(os.devnull, 'w')
+    if args.verbosity>0:
+    	for cal_split in cdata:
+    		print cal_split
+    
+#    print args
+#    pdb.set_trace()
     for cal_split in cdata:
-        if AIPSImage(cal_split.name,"ILC001",1,args.seq).exists():
-            if args.verbosity>0: 
-                print("Deleting old image {}.ILC001.1.{}".format(cal_split.name,args.seq))
-            AIPSImage(cal_split.name,"ILC001",1,args.seq).zap()
-        sys.stdout = null
-        _image(cal_split,args.niter,args.gain,args.cell,args.imsize,args.seq)
-        sys.stdout = orig_stdout
-        if not args.nozap>0: _zapbeam(cal_split.name,args.seq)
-        
+        if AIPSImage(cal_split.name,"ILC001",args.disk,args.seq).exists():
+            print("Deleting old image {}.ILC001.{}.{}".format(cal_split.name,args.disk,args.seq))
+            AIPSImage(cal_split.name,"ILC001",args.disk,args.seq).zap()
+        #if args.verbosity==0: sys.stdout = null
+        _image(cal_split, args.niter, args.gain, args.cell, args.imsize, args.seq)
+        #if args.verbosity==0: sys.stdout = orig_stdout
+        if not args.nozap>0: _zapbeam(cal_split.name,args.disk,args.seq)
+
 
     '''
         Now to look for peaks in the emission, store values and RMS.
@@ -154,32 +161,36 @@ def main():
     print ''
     for cal_split in cdata:
         i=i+1
-        if AIPSImage(cal_split.name,"ICL001",1,args.seq).exists(): 
-            wim = WAIPSImage(cal_split.name,"ICL001",1,args.seq)
+        if AIPSImage(cal_split.name,"ICL001",args.disk,args.seq).exists(): 
+            wim = WAIPSImage(cal_split.name,"ICL001",args.disk,args.seq)
         else: 
             continue
         wim.squeeze()
         rms = 3*wim.pixels.std()
         if rms>wim.header.datamax: continue
-        ew  = (X-wim.header.crpix[0])*-1e-4
-        ns  = (Y-wim.header.crpix[1])*+1e-4     
+        ew  = -(X-wim.header.crpix[0])*args.cell
+        ns  =  (Y-wim.header.crpix[1])*args.cell
         ind = np.where(wim.pixels==wim.header.datamax)
         snr[i] = wim.header.datamax/rms
         x[i]   = ew[ind]
         y[i]   = ns[ind]
-        print("{} {} {}".format(wim.name,ew[ind][0],ns[ind][0]))
-
-
+        print("{0:s} {1:+7.4f} {2:+7.4f}".format(wim.name,ew[ind][0],ns[ind][0]))
         if args.delete>0: wim.zap()
     
-    x_off1 = (x*snr**1).sum()/((snr**1).sum())
-    y_off1 = (y*snr**1).sum()/((snr**1).sum())
+    if args.verbosity>0:
+        print ''
+        print -x
+        print y
+        print snr
 
-    x_off2 = (x*snr**2).sum()/((snr**2).sum())
-    y_off2 = (y*snr**2).sum()/((snr**2).sum())
+    x_off1 = np.nansum(x*snr**1)/np.nansum(snr**1)
+    y_off1 = np.nansum(y*snr**1)/np.nansum(snr**1)
+
+    x_off2 = np.nansum(x*snr**2)/np.nansum(snr**2)
+    y_off2 = np.nansum(y*snr**2)/np.nansum(snr**2)
 
     print('\n#############################################')
-    print(" Target shift is ra={0:+6.4f}, dec={1:+6.4f}".format(-x_off2, -y_off2))
+    print(" Target shift is ra={0:+7.4f}, dec={1:+7.4f}".format(-x_off2, -y_off2))
     print("    Add shift as given to maser pos_shift")
     print('#############################################\n')
 
@@ -187,22 +198,24 @@ def main():
 ### AIPS TASKS DEFINITIONS
 ###################################################
 
-def _image(indata,niter=200,gain=0.3,cell=1.0e-4,imsize=1024,seq=99):
+def _image(indata,niter=200,gain=0.1,cell=1.0e-4,imsize=1024,seq=99):
     imagr            = AIPSTask("imagr")
     imagr.default
     imagr.indata     = indata
     imagr.docalib    = -1
     imagr.outseq     = seq
     imagr.outname    = indata.name
+    imagr.outdisk    = indata.disk
     imagr.cell[1:]   = [cell,cell]
     imagr.imsize[1:] = [imsize,imsize]
     imagr.gain       = gain
     imagr.niter      = niter
     imagr.dotv       = -1
+    #imagr.inp()
     imagr()
 
-def _zapbeam(inname,seq=99):
-    beam=AIPSImage(inname,"IBM001",1,seq)
+def _zapbeam(inname,disk,seq=99):
+    beam=AIPSImage(inname,"IBM001",disk,seq)
     if beam.exists():
         beam.zap()
 

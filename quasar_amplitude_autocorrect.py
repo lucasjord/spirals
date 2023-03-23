@@ -33,6 +33,12 @@ def main():
     parser.add_argument("-c","--cltable",
                         help="CL table to save corrections to. Default 6",
                         type=int,default=6)
+    parser.add_argument("-D","--disk",
+                        help="Disk data is located. Default 1.",
+                        type=int,default=1)
+    parser.add_argument("-q","--seq",
+                        help="Sequence of continuum data. Default 1",
+                        type=int,default=1)
     parser.add_argument('-n','--niter',
                         help='Number of iterations to do. Default 3',
                         type=int,default=3)
@@ -48,7 +54,9 @@ def main():
 
     args = parser.parse_args()
 
-    kla = 'UVDATA'; seq = 1; dsk = 1        # hardcoded nominal values
+    kla = 'UVDATA'
+    seq = args.seq
+    dsk = args.disk 
 
     AIPS.userno = args.aipsID
     exp         = args.epoch.upper() + '_C'    #get_experiment()
@@ -117,6 +125,7 @@ def main():
 def get_plots(data):
     source,time=get_best_sources(data)
     possm=AIPSTask('possm')
+    possm.default
     possm.indata=data
     data.clrstat()
     possm.nplots=0

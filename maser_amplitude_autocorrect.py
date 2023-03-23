@@ -1,3 +1,5 @@
+#!/home/observer/anaconda2/bin/ParselTongue
+
 from AIPSData import AIPSUVData as AUV
 from AIPS import AIPS
 from AIPSTask import AIPSTask
@@ -10,11 +12,12 @@ import peakutils
 import sys, os, random, copy, difflib, re, pdb, time
 import numpy as np
 from math import exp, log, pi, atan2
+import argparse
 
 ##############################################################################
 ##############################################################################
 
-''' 
+'''
 Version = 3.0
 
 This script scales antenna gains from AIPS off maser autocorrections.
@@ -32,65 +35,32 @@ If these assumptions aren't true fix them yourself or write a different script
 Lucas J. Hyland 2019
 Lucas.Hyland@utas.edu.au
 
-Usage:
-
-parseltongue ./amplitude_autocorrect_v3.py source refant
-
-e.g.
-
-parseltongue ./amplitude_autocorrect_v3.py G123.56+0.7 2 
-
-
 HAS BEEN EDITED A LITTLE!! - LJH 18/08/22
 '''
-
-# G123.56+0.7  2       
-# argv[1]      argv[2]                                      
-
-##############################################################################
-##############################################################################
-
-kla = 'UVDATA'
-seq = 1
-dsk = 1
 
 ##############################################################################
 ##############################################################################
 
 def main():
-    ''' ####################
-        ### Help section ###
-        #################### '''
-    if True in [sys.argv[1] in ['help','-help','--help','h','-h','--h'],len(sys.argv)<3]:
-        #######1234567890123456789012345678901234567891234567
-        print '#################### HELP ####################' 
-        print '#                                            #'
-        print '#  Format: parseltongue <script>.py expcode  #'
-        print '#                                   AIPSID   #'
-        print '#                                   source   #'
-        print '#                                   refant   #'
-        print '#                                            #'
-        print '################# PARAMETERS #################'     
-        print '#                                            #'
-        print '#  source: Name of maser in AIPS             #'
-        print '#                                            #'
-        print '#  refant: AIPS antenna number  of station   #'
-        print '#          which  has a good detection of    #'
-        print '#          maser in POL1 and accurate pre-   #'
-        print '#          calibration applied               #'
-        print '#                                            #'
-        print '################## END HELP ##################'  
-        sys.exit()
-    ''' ############################################
-        ### Tentatively check arguments are okay ###
-        ############################################ '''
+    parser = argparse.ArgumentParser()
+    parser.add_argument("epoch",help="Experiment code e.g. s006i",type=str)
+    parser.add_argument("aipsID",help="AIPS ID, e.g 666",type=int)
+    parser.add_argument("maser",help="Which maser to use",type=str)
+    parser.add_argument("-l","--log",help="Where to append results",type=str,default='amplitudes.log')
+    parser.add_argument("-k","--klass",help="AIPS Data KLASS",type=str,default='UVDATA')
+    parser.add_argument("-d","--disk",help="AIPS disk data is on",type=int,default=1)
+    parser.add_argument("-s","--seq",help="AIPS data sequence",type=int,default=1)
+    parser.add_argument("-r","--refant",help='Which antenna number to trust',type=int,default=1)
+
+    args = parser.parse_args()
 
     ### Get reasonable experiment name ###
-    logfile = open(sys.argv[0].replace('.py','.log'),'a')
+    logfile = args.log
     #AIPS.userno,exp=get_experiment()
-    exp         = sys.argv[1].upper()
-    AIPS.userno = int(sys.argv[2])
-    indata = AUV(exp,kla,dsk,seq)
+    exp         = args.epoch.upper()+"_L"
+    AIPS.userno = args.aipsID
+
+    indata = AUV(exp,args.klass,args.disk,args.seq)
     if not indata.exists():
         sys.exit(indata.name+' in AIPSID=\
             '+str(AIPS.userno)+' does not exist')
@@ -99,7 +69,7 @@ def main():
     CL = indata.table_highver('CL')
     if CL==1: sys.exit('CL1 !! Need to pre-calibrate!')
     ### Check if source is valid ###
-    source   = sys.argv[3]
+    source   = args.maser
     sources  = indata.sources
     msources = difflib.get_close_matches(source, sources)
     try:
@@ -110,7 +80,7 @@ def main():
     except IndexError:
         sys.exit('No suggested sources, unknown source '+source)
     ### Check if ref antenna is valid ###
-    reference_antenna = int(sys.argv[4])
+    reference_antenna = args.refant
     antable = indata.table('AN',1)
     an = {}
     for row in antable:
@@ -168,15 +138,17 @@ def main():
     polz = {}
     for p in range(len(indata.polarizations)):
         polz.update({p:indata.polarizations[p]})
-    for ant in range(len(indata.antennas)):
-        for pol in range(len(indata.polarizations)):
-            cor = round(median(corrections[ant,pol]),2)
-            if True in [cor>=1.0, cor<=1.0]:
-                ''
-            else:
-                cor=0.0
-            print >> logfile, "Correction for "+an[ant+1]+' '+polz[pol]+' is '+str(cor)
+    with open(logfile,'w+') as w:
+        for ant in range(len(indata.antennas)):
+            for pol in range(len(indata.polarizations)):
+                cor = round(median(corrections[ant,pol]),2)
+                if True in [cor>=1.0, cor<=1.0]:
+                    ''
+                else:
+                    cor=0.0
+                print >> w, "Correction for "+an[ant+1]+' '+polz[pol]+' is '+str(cor)
             _clcor(indata,ant+1,polz[pol],cor,CL)
+    # delete temp data
     spl_data.zap()
     print 'CLCOR2: localhos 31DEC16 TST: Cpu=      0.0  Real=      0  IO=         1'
     print '                                        '
@@ -184,7 +156,7 @@ def main():
     print 'AMPL: Appears to have ended successfully'
     print '########################################################################'
     print '                                        '
-    print 'If you want please check '+sys.argv[0].replace('.py','.log')+' for list of applied corrections'
+    print 'If you want please check '+logfile+' for list of applied corrections'
     print 'And <antenna>_amplitude_tmp.png diagnostic plots (coming soon)'
     ''' ### DONE ### '''
 

@@ -1198,17 +1198,8 @@ def runprtsn(indata):
 
     namma=str(year)+monthlist[int(month)-1]+strday
 
-    prtab.outprint='PWD:'+namma+'_RATE_MDEL_1.DAT'
+    prtab.outprint='PWD:'+namma+'_RATE_MDEL.DAT'
     prtab()
-
-    os.system('cp '+namma+'_RATE_MDEL_1.DAT '+namma+'_RATE_MDEL.DAT')
-
-    prtab.box[1][4] = 18
-    prtab.box[2][1] = 24
-    prtab.box[2][2] = 26
-    prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
-    prtab()
-
 
 ##############################################################################
 # Print out SN table
@@ -1699,7 +1690,7 @@ def make_baseline_plot(num_baselines, data, n, m, start, end, str_baselines, str
         elif doplot_flag==2:
             ax.set_ylim(-5,5)
         else:
-            ax.set_ylim(-5,5)
+            ax.set_ylim(-10,10)
         if m==1:
             title('Rate [mHz]')
         if n<num_baselines:
@@ -1783,7 +1774,7 @@ def make_baseline_plot2(num_baselines, data, n, m, start, end, str_baselines, st
         if doplot_flag==1:
             ax.set_ylim(low_delay*1.1,high_delay*1.1)
         elif doplot_flag==2:
-            ax.set_ylim(-5,5)
+            ax.set_ylim(-10,10)
         else:
             ax.set_ylim(-10,10)
         if m==1:
@@ -2468,6 +2459,7 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
     fringe.dparm[2]   = 250
     fringe.dparm[3]   = 50
     fringe.dparm[4]   = dpfour
+    fringe.dparm[7]   = 3
     fringe.dparm[8]   = 1
     fringe.snver      = 0
     fringe.calso[1:]  = mp_source
@@ -2755,8 +2747,7 @@ def get_split_sources(indata, target, cvelsource, calsource):
 
 ##############################################################################
 #
-def mafringe(indata, fr_image, calsource, channel, refant, outdisk, 
-             doband, bpver, dpfour, num_if=8):
+def mafringe(indata, fr_image, calsource, channel, refant, outdisk, doband, bpver,dpfour):
     split                = AIPSTask('SPLIT')
     split.indata         = indata
     split.source[1]      = calsource
@@ -2834,6 +2825,8 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
         vbgludata2.zap()
     vbglu()
 
+    vbgludata.zap()
+
     vbglu.indata  = vbgludata2
     vbglu.in2data  = vbgludata2
     vbglu.outcl   = '8IF'
@@ -2845,18 +2838,11 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
         vbgludata3.zap()
     vbglu()
 
+    vbgludata2.zap()
+
     indxr.indata    = vbgludata3
     indxr()
 
-    # deleting split data (1IF, reduced name)
-    splitdata.zap()
-    # deleting 2IF data
-    vbgludata.zap()
-    # deleting 4IF uvdata
-    vbgludata2.zap()
-
-
-    # running fring on the output data
     fringe               = AIPSTask('FRING')
 
     if fr_image.exists():
@@ -2875,7 +2861,6 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     fringe.calsour[1]    = ''
     fringe.solint        = 6
     fringe.aparm[1:]     = [2, 0, 0, 0, 0]
-    fringe.aparm[7]      = 3
     fringe.dparm[1:]     = [1, -1, 0, 0]
     fringe.dparm[4]      = dpfour
     fringe.snver         = 0
@@ -2898,9 +2883,9 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
         mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on disk '+str(int(fringe.in2disk)), logfile)
         mprint('################################################',logfile)
     else:
-        mprint('##############################################',logfile)
-        mprint('Using point source as input model from fringe.',logfile)
-        mprint('##############################################',logfile)
+        mprint('################################################',logfile)
+        mprint('Using point source as imput model fro fringe.',logfile)
+        mprint('################################################',logfile)
 
     fringe.indata        = indata
     fringe.refant        = refant
@@ -2909,7 +2894,7 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
     fringe.docal         = 1
     fringe.calsour[1:]   = [calsour]
     fringe.solint        = 6
-    fringe.aparm[1:]     = [2, 0, 1, 0, 0]
+    fringe.aparm[1:]     = [2, 0, 1, 0, 0, 0, 3]
     fringe.dparm[1:]     = [1, -1, 0, 0]
     fringe.dparm[4]      = dpfour
     fringe.snver         = 4
@@ -3916,8 +3901,8 @@ def run_masplit(indata, source, outclass, doband, bpver, smooth, channel):
 
         split            = AIPSTask('SPLIT')
         split.indata     = indata
-        split.bchan      = channel
-        split.echan      = channel
+        split.bchan      = 0
+        split.echan      = 0
         split.flagver    = 0
         split.docalib    = 1
         split.source[1:] = source
@@ -4911,8 +4896,8 @@ def data_info(indata, i, geo, cont, line, logfile):
 # Added by LJH
 
 # deletes beam
-def _zapbeam(source,inseq=1,disk=1):
-    beam=AIPSImage(source,'IBM001',disk,inseq)
+def _zapbeam(source,inseq=1):
+    beam=AIPSImage(source,'IBM001',1,inseq)
     if beam.exists():
         beam.zap()
 
@@ -5760,17 +5745,9 @@ if ma_fringe_flag==1 and line != cont:
         mprint('Using unshifted data (CVEL).',logfile)
         line_used = line_data
 
-    # get number of IFs
-    NIF = cont_data.header['naxis'][1]
-    (outdata1,outdata2)=mafringe(line_used, fr_image, calsource, channel, refant, line_data2.disk, doband, bpver, dpfour, num_if=NIF)
+    (outdata1,outdata2)=mafringe(line_used, fr_image, calsource, channel, refant, line_data2.disk, doband, bpver, dpfour)
     runtacop(outdata1, line_used, 'SN', 1, 4, 1)
     runtacop(outdata2, cont_data, 'SN', 1, 4, 1)
-
-    outdata1.clrstat()
-    outdata1.zap()
-    outdata2.clrstat()
-    outdata2.zap()
-    
     runclcal(line_used, 4, 7, 8, '', 1, refant)
     if snflg_flag==1:
         runsnflg(cont_data, 4, calsource)
@@ -6057,22 +6034,22 @@ if imv_prep_flag==1:
     mprint('######################',logfile)
 
 if imultiv_flag==1:
-    if line_data2.exists() and line!=cont:
+    if line_data2.exists() and line!=cont: 
         linedata = line_data2
         linedata.clrstat()
         check_sncl(linedata, 5, 8,logfile)
         calsource = findcal(linedata, calsource)
         snout = 7
     elif line!=cont:
-        linedata = line_data
+        linedata = line_data   
         linedata.clrstat()
         check_sncl(linedata, 5, 8,logfile)
         calsource = findcal(linedata, calsource)
         snout = 7
-    elif line==cont and cal_split.exists():
+    elif line==cont and cal_split.exists(): 
         check_sncl(cal_split,1,1,logfile)
         snout = 3
-    else:
+    else: 
         sys.exit('No valid data to run inverse multiview on!')
 
     if not os.path.exists('./multiview'):
@@ -6327,26 +6304,26 @@ if imv_imagr_flag==1:
         mprint('######################',logfile)
 
         # delete old images
-        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
-            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
-            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
+        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).exists():
+            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).zap()
+        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).exists():
+            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).zap()
         runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna1,
             uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=9)
-        _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)
+        _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1)
         runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna2,
             uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=10)
-        _zapbeam(calsource[:11-len(imna2)]+imna2,inseq=1,disk=defdisk)
+        _zapbeam(calsource[:11-len(imna2)]+imna2,inseq=1)
     elif line==cont:
         if cal_split.exists():
             cal_split.clrstat()
             check_sncl(cal_split,3,3,logfile)
             # delete old images
-            if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
-                AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-            if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
-                AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
-
+            if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).exists():
+                AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',1,1).zap()
+            if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).exists():
+                AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',1,1).zap()
+            
             mprint('######################',logfile)
             mprint('Imaging source: '+str(calsource),logfile)
             mprint('######################',logfile)
