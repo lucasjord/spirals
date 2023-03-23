@@ -1,7 +1,10 @@
 ##############################################################################
-#       ParselTongue definition file for BeSSeL-Survey calibration           #
+#   ParselTongue definition file for BeSSeL/SPiRALS Survey calibration       #
 #                                                                            #
 #                  written by Andreas Brunthaler                             #
+#                                                                            #
+#                  updated for the LBA, AuScope                              #
+#                 and imultiview by Lucas Hyland                             #
 #                                                                            #
 # Changes:                                                                   #
 #                                                                            #
@@ -43,6 +46,7 @@
 # 2016/04/06 Added weightit=3 and aparm(7)=10 in fringegeo, changed delay    #
 #            error for SX geoblocks to 3.                                    #
 # 2016/09/07 Changed delay window in manual phasecal                         #
+#                                                                            #
 # 2017/11/13 Added LBA apcal, various corrections for LBA data - LJH         #
 # 2018/08/27 Added YG flag in make station_file.inp   - LJH                  #
 # 2019/06/20 Removed fringecal RR/LL averaging     - LJH                     #
@@ -56,9 +60,11 @@
 #            seperate channel to fringe fitting - LJH                        #
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
 # 2021/11/30 Added run_wa_pang routine - LJH                                 #
+# 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
+#                                                                            #
 ##############################################################################
 
-version_date='2021/11/30'
+version_date='2023/03/23'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -2756,7 +2762,14 @@ def get_split_sources(indata, target, cvelsource, calsource):
 ##############################################################################
 #
 def mafringe(indata, fr_image, calsource, channel, refant, outdisk, 
-             doband, bpver, dpfour, num_if=8):
+             doband, bpver, dpfour, num_if=4):
+    '''
+    Maser reference channel fringe fitting subroutine. Splits out reference,
+    makes a temp uvdata file with the equivalent number of IFs as the cont
+    data, fringe fits the data then applies it.
+    '''
+
+    # splitting out reference channel and renaming
     split                = AIPSTask('SPLIT')
     split.indata         = indata
     split.source[1]      = calsource
@@ -2791,6 +2804,7 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
 
     splitdata.rename(reducedname, 'CH'+str(channel), 1)
 
+    # makes single source split file a multi-source uv data set
     multi         = AIPSTask('MULTI')
     multi.indata  = splitdata
     multi.outname = reducedname
@@ -2809,52 +2823,30 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     indxr.cparm[1:] = [0,0./60.]
     indxr()
 
+    # running VBGLU to get correct number of IFs
     vbglu         = AIPSTask('VBGLU')
     vbglu.indata  = multidata
     vbglu.in2data = multidata
-    vbglu.outname = reducedname
-    vbglu.outdisk = outdisk
-    vbglu.outcl   = '2IF'
+    # iterating over IFs. Assuming only 2^n
+    for i in (np.arange(0,np.log2(num_ifs),1)+1):
+        vbglu.outname = reducedname
+        vbglu.outdisk = outdisk
+        vbglu.outcl   = '{}IF'.format(2**i)
+        # checking for and deleting old versions of outdata
+        vbgludata = AIPSUVData(reducedname, vbgludata.outcl, outdisk, 1)
+        if vbgludata.exists():
+            vbgludata.clrstat()
+            vbgludata.zap()
+        # running vbglu - makes vbgludata
+        vbglu()
+        # setting up for next loop
+        #AIPSUVData(vbgludata.inname, vbgludata.inclass, vbgludata.indisk, vbgludata.inseq).zap()
+        #
+        vbglu.indata  = vbgludata
+        vbglu.in2data = vbgludata        
 
-    vbgludata = AIPSUVData(reducedname, '2IF', outdisk, 1)
-
-    if vbgludata.exists():
-        vbgludata.clrstat()
-        vbgludata.zap()
-    vbglu()
-
-    vbglu.indata  = vbgludata
-    vbglu.in2data  = vbgludata
-    vbglu.outcl   = '4IF'
-
-    vbgludata2 = AIPSUVData(reducedname, '4IF', outdisk, 1)
-
-    if vbgludata2.exists():
-        vbgludata2.clrstat()
-        vbgludata2.zap()
-    vbglu()
-
-    vbglu.indata  = vbgludata2
-    vbglu.in2data  = vbgludata2
-    vbglu.outcl   = '8IF'
-
-    vbgludata3 = AIPSUVData(reducedname, '8IF', outdisk, 1)
-
-    if vbgludata3.exists():
-        vbgludata3.clrstat()
-        vbgludata3.zap()
-    vbglu()
-
-    indxr.indata    = vbgludata3
+    indxr.indata    = vbgludata
     indxr()
-
-    # deleting split data (1IF, reduced name)
-    splitdata.zap()
-    # deleting 2IF data
-    vbgludata.zap()
-    # deleting 4IF uvdata
-    vbgludata2.zap()
-
 
     # running fring on the output data
     fringe               = AIPSTask('FRING')
@@ -2869,6 +2861,7 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
         mprint('Using point source as imput model for fringe.',logfile)
         mprint('################################################',logfile)
 
+    # run fringe on maser channel data for line
     fringe.indata        = multidata
     fringe.refant        = refant
     fringe.docal         = 1
@@ -2881,10 +2874,11 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     fringe.snver         = 0
     fringe()
 
-    fringe.indata        = vbgludata3
+    # run fringe on vbglu data for cont
+    fringe.indata        = vbgludata
     fringe()
 
-    return multidata, vbgludata3
+    return multidata, vbgludata
 
 ##############################################################################
 #
