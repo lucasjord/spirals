@@ -1,10 +1,15 @@
-FILES FOR SPiRALS calibration.
-
 Experimental is for edits and updates of pipeline scripts
 
-Necessary python packages are:
- -ParselTongue/Obit
- -astropy
- -matplotlib
- -numpy
- -os, math, time, sys
+scripts:
+	FILES FOR SPiRALS calibration. Combination of python scripts written by me, fortran by Mark Reid. 
+
+	Necessary python packages are:
+		 - python 2,7
+		 - ParselTongue/Obit
+		 - astropy
+		 - matplotlib
+		 - numpy
+
+
+imultiview_p2:
+        Supporting files for inverse multiview paper II, in particular Figures 1, 2, 7 and 8.
