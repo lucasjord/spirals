@@ -1,0 +1,367 @@
+*------------------------------------------------------------------------------
+$MODE;
+*
+def spirals.meth;
+     ref $PROCEDURES = Mode_01;
+     ref $FREQ = 6596.00MHz16x16MHz:Cd:Ho;
+     ref $FREQ = 6596.00MHz16x16MHz#2:Wa;
+     ref $FREQ = 6580.00MHz2x4x32MHz:Ke:Hb;
+     ref $IF = LO@7300MHzDPolNoTone:Cd;
+     ref $IF = LO@7000MHzDPolNoTone:Ho;
+     ref $IF = LO@6000MHzDPolNoTone:Hb:Ke;
+     ref $IF = LO@5900MHzDPolNoTone:Wa;
+     ref $BBC = 8BBCs:Hb:Ke:Cd:Ho:Wa;
+     ref $TRACKS = VDIF.16Ch2bit:Cd:Ho:Wa;
+     ref $TRACKS = VDIF.2x4Ch2bit:Ke:Hb;
+     ref $ROLL = NoRoll:Cd:Ho:Hb:Wa:Ke;
+     ref $PHASE_CAL_DETECT = NoDetect:Cd:Ho:Hb:Wa:Ke;
+enddef;
+*------------------------------------------------------------------------------
+$STATION;
+*
+def Cd;
+     ref $SITE = CEDUNA;
+     ref $ANTENNA = CEDUNA;
+     ref $DAS = VDIF;
+enddef;
+*
+def Ho;
+     ref $SITE = HOBART26;
+     ref $ANTENNA = HOBART26;
+     ref $DAS = VDIF;
+enddef;
+*
+def Hb;
+     ref $SITE = HOBART12;
+     ref $ANTENNA = HOBART12;
+     ref $DAS = VDIF;
+enddef;
+*
+def Wa;
+     ref $SITE = WARK30M;
+     ref $ANTENNA = WARK30M;
+     ref $DAS = VDIF;
+enddef;
+*
+def Ke;
+     ref $SITE = KATH12M;
+     ref $ANTENNA = KATH12M;
+     ref $DAS = VDIF;
+enddef;
+*------------------------------------------------------------------------------
+$PROCEDURES;
+*
+def Mode_01;
+     procedure_name_prefix =  "01";
+     tape_change =  420 sec;
+     headstack_motion =    6 sec;
+     new_source_command =    5 sec;
+     new_tape_setup =   20 sec;
+     setup_always = on :  20 sec;
+     parity_check = off : 100 sec;
+     tape_prepass = off : 600 sec;
+     preob_cal  = on :  10 sec : preob;
+     midob_cal  = on :  15 sec : midob;
+     postob_cal = on :   0 sec : postob;
+enddef;
+*------------------------------------------------------------------------------
+$SITE;
+*
+def CEDUNA;
+     site_type = fixed;
+     site_name = CEDUNA;
+     site_ID = Cd;
+*    elev=  164.62 long=-133:48:35. lat=-31:52:03.7
+     site_position =-3753442.74570 m: 3912709.75300 m:-3348067.60950 m;
+     site_velocity = -0.041730   m/yr:  0.002670   m/yr:  0.049900  m/yr;
+*    First line below is VEX standard format.  Use only when readers are ready.
+*    site_position_epoch = 1997y001d;
+     site_position_epoch =   50449;
+enddef;
+*
+def HOBART26;
+     site_type = fixed;
+     site_name = HOBART26;
+     site_ID = Ho;
+*    elev=   65.09 long=-147:26:25. lat=-42:48:12.9
+     site_position =-3950237.40300 m: 2522347.68410 m:-4311561.83350 m;
+     site_velocity = -0.039010   m/yr:  0.007960   m/yr:  0.041100  m/yr;
+*    First line below is VEX standard format.  Use only when readers are ready.
+*    site_position_epoch = 2014y001d;
+     site_position_epoch =   56658;
+enddef;
+*
+def HOBART12;
+     site_type = fixed;
+     site_name = HOBART12;
+     site_ID = Hb;
+*    elev=   40.98 long=-147:26:17. lat=-42:48:20.1
+     site_position =-3949990.84020 m: 2522421.21910 m:-4311707.99890 m;
+     site_velocity = -0.039010   m/yr:  0.007960   m/yr:  0.041100  m/yr;
+*    First line below is VEX standard format.  Use only when readers are ready.
+*    site_position_epoch = 2014y001d;
+     site_position_epoch =   56658;
+enddef;
+*
+def WARK30M;
+     site_type = fixed;
+     site_name = WARK30M;
+     site_ID = Wa;
+*    elev=  122.35 long=-174:39:46. lat=-36:25:59.4
+     site_position =-5115425.81800 m:  477880.24800 m:-3767042.05500 m;
+     site_velocity = -0.021220   m/yr: -0.003070   m/yr:  0.036020  m/yr;
+*    First line below is VEX standard format.  Use only when readers are ready.
+*    site_position_epoch = 2017y235d;
+     site_position_epoch =   57988;
+enddef;
+*
+def KATH12M;
+     site_type = fixed;
+     site_name = KATH12M;
+     site_ID = Ke;
+*    elev=  189.27 long=-132:09:08. lat=-14:22:31.7
+     site_position =-4147354.69130 m: 4581542.37720 m:-1573303.15650 m;
+     site_velocity = -0.037710   m/yr: -0.011590   m/yr:  0.056300  m/yr;
+*    First line below is VEX standard format.  Use only when readers are ready.
+*    site_position_epoch = 2014y001d;
+     site_position_epoch =   56658;
+enddef;
+*------------------------------------------------------------------------------
+$ANTENNA;
+*
+def CEDUNA;
+     axis_type = az : el;
+     antenna_motion = el :  40.0 deg/min :  2 sec;  *    0.028 deg/sec/sec
+     antenna_motion = az :  40.0 deg/min :  2 sec;  *    0.028 deg/sec/sec
+     axis_offset =    0.00240 m;
+enddef;
+*
+def HOBART26;
+     axis_type = x : yew;
+     antenna_motion = x :  40.0 deg/min :  2 sec;  *    0.028 deg/sec/sec
+     antenna_motion = y :  40.0 deg/min :  2 sec;  *    0.028 deg/sec/sec
+     axis_offset =    8.19440 m;
+enddef;
+*
+def HOBART12;
+     axis_type = az : el;
+     antenna_motion = el :  75.0 deg/min :  2 sec;  *    1.300 deg/sec/sec
+     antenna_motion = az : 300.0 deg/min :  2 sec;  *    1.300 deg/sec/sec
+     axis_offset =    0.00000 m;
+enddef;
+*
+def WARK30M;
+     axis_type = az : el;
+     antenna_motion = el :  21.6 deg/min :  2 sec;  *    0.250 deg/sec/sec
+     antenna_motion = az :  22.0 deg/min :  2 sec;  *    0.200 deg/sec/sec
+     axis_offset =    2.47700 m;
+enddef;
+*
+def KATH12M;
+     axis_type = az : el;
+     antenna_motion = el :  75.0 deg/min :  2 sec;  *    1.300 deg/sec/sec
+     antenna_motion = az : 300.0 deg/min :  2 sec;  *    1.300 deg/sec/sec
+     axis_offset =    0.00000 m;
+enddef;
+*------------------------------------------------------------------------------
+$DAS;
+*
+def VDIF;
+     record_transport_type = VDIF;
+     electronics_rack_type = VDIF;
+     number_drives = 2;
+     headstack = 1 :            : 0 ;
+     headstack = 2 :            : 1 ;
+     tape_motion = adaptive : 0 min: 0 min: 10 sec;
+enddef;
+*
+*------------------------------------------------------------------------------
+$FREQ;
+*
+def 6596.00MHz16x16MHz;
+* mode =  1    stations =Cd:Ho
+     sample_rate =    32.000 Ms/sec;  * (2bits/sample)
+     chan_def = :  6596.00 MHz : L :  16.00 MHz : &CH01 : &BBC01 : &NoCal;
+     chan_def = :  6628.00 MHz : L :  16.00 MHz : &CH02 : &BBC02 : &NoCal; 
+     chan_def = :  6660.00 MHz : L :  16.00 MHz : &CH03 : &BBC03 : &NoCal; 
+     chan_def = :  6692.00 MHz : L :  16.00 MHz : &CH04 : &BBC04 : &NoCal; 
+     chan_def = :  6596.00 MHz : L :  16.00 MHz : &CH05 : &BBC05 : &NoCal; 
+     chan_def = :  6628.00 MHz : L :  16.00 MHz : &CH06 : &BBC06 : &NoCal; 
+     chan_def = :  6660.00 MHz : L :  16.00 MHz : &CH07 : &BBC07 : &NoCal; 
+     chan_def = :  6692.00 MHz : L :  16.00 MHz : &CH08 : &BBC08 : &NoCal; 
+     chan_def = :  6596.00 MHz : U :  16.00 MHz : &CH09 : &BBC01 : &NoCal;
+     chan_def = :  6628.00 MHz : U :  16.00 MHz : &CH10 : &BBC02 : &NoCal; 
+     chan_def = :  6660.00 MHz : U :  16.00 MHz : &CH11 : &BBC03 : &NoCal; 
+     chan_def = :  6692.00 MHz : U :  16.00 MHz : &CH12 : &BBC04 : &NoCal; 
+     chan_def = :  6596.00 MHz : U :  16.00 MHz : &CH13 : &BBC05 : &NoCal; 
+     chan_def = :  6628.00 MHz : U :  16.00 MHz : &CH14 : &BBC06 : &NoCal; 
+     chan_def = :  6660.00 MHz : U :  16.00 MHz : &CH15 : &BBC07 : &NoCal; 
+     chan_def = :  6692.00 MHz : U :  16.00 MHz : &CH16 : &BBC08 : &NoCal;
+enddef;
+*
+def 6596.00MHz16x16MHz#2;
+* mode =  1    stations =Wa
+     sample_rate =    32.000 Ms/sec;  * (2bits/sample)
+     chan_def = :  6596.00 MHz : U :  16.00 MHz : &CH01 : &BBC01 : &NoCal;
+     chan_def = :  6628.00 MHz : U :  16.00 MHz : &CH02 : &BBC02 : &NoCal; 
+     chan_def = :  6660.00 MHz : U :  16.00 MHz : &CH03 : &BBC03 : &NoCal; 
+     chan_def = :  6692.00 MHz : U :  16.00 MHz : &CH04 : &BBC04 : &NoCal; 
+     chan_def = :  6596.00 MHz : U :  16.00 MHz : &CH05 : &BBC05 : &NoCal; 
+     chan_def = :  6628.00 MHz : U :  16.00 MHz : &CH06 : &BBC06 : &NoCal; 
+     chan_def = :  6660.00 MHz : U :  16.00 MHz : &CH07 : &BBC07 : &NoCal; 
+     chan_def = :  6692.00 MHz : U :  16.00 MHz : &CH08 : &BBC08 : &NoCal; 
+     chan_def = :  6596.00 MHz : L :  16.00 MHz : &CH09 : &BBC01 : &NoCal;
+     chan_def = :  6628.00 MHz : L :  16.00 MHz : &CH10 : &BBC02 : &NoCal; 
+     chan_def = :  6660.00 MHz : L :  16.00 MHz : &CH11 : &BBC03 : &NoCal; 
+     chan_def = :  6692.00 MHz : L :  16.00 MHz : &CH12 : &BBC04 : &NoCal; 
+     chan_def = :  6596.00 MHz : L :  16.00 MHz : &CH13 : &BBC05 : &NoCal; 
+     chan_def = :  6628.00 MHz : L :  16.00 MHz : &CH14 : &BBC06 : &NoCal; 
+     chan_def = :  6660.00 MHz : L :  16.00 MHz : &CH15 : &BBC07 : &NoCal; 
+     chan_def = :  6692.00 MHz : L :  16.00 MHz : &CH16 : &BBC08 : &NoCal;
+enddef;
+*
+def 6580.00MHz2x4x32MHz;
+* mode =  1    stations =Hb:Ke
+    sample_rate =    64.000 Ms/sec;  * (2bits/sample)
+**  First datastream, C-band, X-pol
+    chan_def =  :  6580.00 MHz : U :  32.000 MHz : &CH01 : &BBC01 : &NoCal;
+    chan_def =  :  6612.00 MHz : U :  32.000 MHz : &CH02 : &BBC02 : &NoCal;
+    chan_def =  :  6644.00 MHz : U :  32.000 MHz : &CH03 : &BBC03 : &NoCal;
+    chan_def =  :  6676.00 MHz : U :  32.000 MHz : &CH04 : &BBC04 : &NoCal;
+**  Second datastream, C-band, Y-pol
+    chan_def =  :  6580.00 MHz : U :  32.000 MHz : &CH05 : &BBC05 : &NoCal;
+    chan_def =  :  6612.00 MHz : U :  32.000 MHz : &CH06 : &BBC06 : &NoCal;
+    chan_def =  :  6644.00 MHz : U :  32.000 MHz : &CH07 : &BBC07 : &NoCal;
+    chan_def =  :  6676.00 MHz : U :  32.000 MHz : &CH08 : &BBC08 : &NoCal;
+enddef;
+*------------------------------------------------------------------------------
+$IF;
+*
+def LO@7300MHzDPolNoTone;
+* mode =  1    stations =Cd
+     if_def = &IF_A : A1 : R :  7300.00 MHz : L ; * PCall off!   0.0   0.0  NA     0 NA
+     if_def = &IF_B : B1 : L :  7300.00 MHz : L ; * PCall off!   0.0   0.0  NA     0 NA
+enddef;
+*
+def LO@7000MHzDPolNoTone;
+* mode =  1    stations =Ho
+     if_def = &IF_A : A1 : R :  7000.00 MHz : L ; * PCall off!   0.0   0.0  NA     0 NA
+     if_def = &IF_B : B1 : L :  7000.00 MHz : L ; * PCall off!   0.0   0.0  NA     0 NA
+enddef;
+*
+def LO@6000MHzDPolNoTone;
+* mode =  1    stations =Hb:Ke
+     if_def = &IF_A : A1 : R :  6000.00 MHz : U ; * PCall off!   0.0   0.0  NA     0 NA
+     if_def = &IF_B : B4 : L :  6000.00 MHz : U ; * PCall off!   0.0   0.0  NA     0 NA
+enddef;
+*
+def LO@5900MHzDPolNoTone;
+* mode =  1    stations =Wa
+     if_def = &IF_A : A1 : R :  5900.00 MHz : U ; * PCall off!   0.0   0.0  NA     0 NA
+     if_def = &IF_B : B2 : L :  5900.00 MHz : U ; * PCall off!   0.0   0.0  NA     0 NA
+enddef;
+*------------------------------------------------------------------------------
+$BBC;
+*
+def 8BBCs;
+* mode =  1    stations =Cd:Ho:Wa:Hb:Ke
+     BBC_assign = &BBC01 :  1 : &IF_A;
+     BBC_assign = &BBC02 :  2 : &IF_A;
+     BBC_assign = &BBC03 :  3 : &IF_A;
+     BBC_assign = &BBC04 :  4 : &IF_A;
+     BBC_assign = &BBC05 :  5 : &IF_B;
+     BBC_assign = &BBC06 :  6 : &IF_B;
+     BBC_assign = &BBC07 :  7 : &IF_B;
+     BBC_assign = &BBC08 :  8 : &IF_B;
+enddef;
+*
+*------------------------------------------------------------------------------
+$PHASE_CAL_DETECT;
+*
+def NoDetect;
+* mode =  1    stations =Cd:Ho:Hb:Wa:Ke
+     phase_cal_detect = &NoCal;
+enddef;
+*------------------------------------------------------------------------------
+$TRACKS;
+*
+def VDIF.2x4Ch2bit;
+* mode =  1 stations =Hb:Ke
+  track_frame_format = VDIF/8032/2;
+  fanout_def = A : &CH01 : sign : 1 : 00;
+  fanout_def = A : &CH01 : mag  : 1 : 01;
+  fanout_def = A : &CH02 : sign : 1 : 02;
+  fanout_def = A : &CH02 : mag  : 1 : 03;
+  fanout_def = A : &CH03 : sign : 1 : 04;
+  fanout_def = A : &CH03 : mag  : 1 : 05;
+  fanout_def = A : &CH04 : sign : 1 : 06;
+  fanout_def = A : &CH04 : mag  : 1 : 07;
+  fanout_def = A : &CH05 : sign : 1 : 08;
+  fanout_def = A : &CH05 : mag  : 1 : 09;
+  fanout_def = A : &CH06 : sign : 1 : 10;
+  fanout_def = A : &CH06 : mag  : 1 : 11;
+  fanout_def = A : &CH07 : sign : 1 : 12;
+  fanout_def = A : &CH07 : mag  : 1 : 13;
+  fanout_def = A : &CH08 : sign : 1 : 14;
+  fanout_def = A : &CH08 : mag  : 1 : 15;
+enddef;
+*
+def VDIF.16Ch2bit;
+* mode =  1 stations =Wa:Ho:Cd
+  track_frame_format = VDIF/8032/2;
+  fanout_def = A : &CH01 : sign : 1 : 00;
+  fanout_def = A : &CH01 : mag  : 1 : 01;
+  fanout_def = A : &CH02 : sign : 1 : 02;
+  fanout_def = A : &CH02 : mag  : 1 : 03;
+  fanout_def = A : &CH03 : sign : 1 : 04;
+  fanout_def = A : &CH03 : mag  : 1 : 05;
+  fanout_def = A : &CH04 : sign : 1 : 06;
+  fanout_def = A : &CH04 : mag  : 1 : 07;
+  fanout_def = A : &CH05 : sign : 1 : 08;
+  fanout_def = A : &CH05 : mag  : 1 : 09;
+  fanout_def = A : &CH06 : sign : 1 : 10;
+  fanout_def = A : &CH06 : mag  : 1 : 11;
+  fanout_def = A : &CH07 : sign : 1 : 12;
+  fanout_def = A : &CH07 : mag  : 1 : 13;
+  fanout_def = A : &CH08 : sign : 1 : 14;
+  fanout_def = A : &CH08 : mag  : 1 : 15;
+  fanout_def = A : &CH09 : sign : 1 : 16;
+  fanout_def = A : &CH09 : mag  : 1 : 17;
+  fanout_def = A : &CH10 : sign : 1 : 18;
+  fanout_def = A : &CH10 : mag  : 1 : 19;
+  fanout_def = A : &CH11 : sign : 1 : 20;
+  fanout_def = A : &CH11 : mag  : 1 : 21;
+  fanout_def = A : &CH12 : sign : 1 : 22;
+  fanout_def = A : &CH12 : mag  : 1 : 23;
+  fanout_def = A : &CH13 : sign : 1 : 24;
+  fanout_def = A : &CH13 : mag  : 1 : 25;
+  fanout_def = A : &CH14 : sign : 1 : 26;
+  fanout_def = A : &CH14 : mag  : 1 : 27;
+  fanout_def = A : &CH15 : sign : 1 : 28;
+  fanout_def = A : &CH15 : mag  : 1 : 29;
+  fanout_def = A : &CH16 : sign : 1 : 30;
+  fanout_def = A : &CH16 : mag  : 1 : 31;
+enddef;
+*
+*------------------------------------------------------------------------------
+$HEAD_POS;
+def DiskVoid;
+* mode =  1    stations =Cd:Ho:Hb:Wa:Ke
+*     Head positions irrelevant for Disk: empty def
+enddef;
+*------------------------------------------------------------------------------
+$PASS_ORDER;
+*
+def DiskVoid;
+* mode =  1    stations =Cd:Ho:Hb:Wa:Ke
+*     Pass orders irrelevant for Disk: empty def
+enddef;
+*------------------------------------------------------------------------------
+$ROLL;
+*
+def NoRoll;
+* mode =  1    stations =Cd:Ho:Hb:Wa:Ke
+*    barrel-roll set to 'roll_off', so reverse-roll by  0 (1 head)
+     roll = off;
+enddef;
+*------------------------------------------------------------------------------
