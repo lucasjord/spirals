@@ -2442,6 +2442,7 @@ def runapcal(indata, tyver, gcver, snver, dofit):
     for i in ant:
         apcal.dofit[i]  = dofit
     apcal()
+    
 ##############################################################################
 # runapcal added by Lucas Hyland Nov 2017 for LBA
 def runapcal_lba(indata, snver, inver, outver):
