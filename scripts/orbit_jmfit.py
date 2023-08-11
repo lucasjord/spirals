@@ -1,4 +1,4 @@
-#!/home/observer/anaconda2/bin/ParselTongue
+#!/usr/bin/env ParselTongue
 
 ####################################################################################################
 
@@ -71,18 +71,25 @@ def main():
             for disk in range(len(AIPS.disks)-1):
                 for seq in range(2):
                     indata = AIPSUVData(args.experiment.upper()+ftype,expclass,disk+1,seq+1)
-                    if indata.exists(): 
-                        if args.verbosity>0: print("Found file {}.{}.{}.{}".format(args.experiment.upper()+ftype,expclass,disk+1,seq+1))
+                    if indata.exists():
+                        if args.verbosity>0:
+                            print("Found file {}.{}.{}.{}".format(args.experiment.upper()+ftype,
+                                   expclass, disk+1, seq+1))
                         success = success + 1
                         break
-                    else: 
-                        if args.verbosity>1: print("Did not find file {}.{}.{}.{}".format(args.experiment.upper()+ftype,expclass,disk+1,seq+1))
+                    else:
+                        if args.verbosity>1: print("Did not find file {}.{}.{}.{}".format(
+                                                    args.experiment.upper()+ftype,
+                                                    expclass, disk+1, seq+1))
                         continue
-    if success<=0: sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment.upper(),args.aipsid))
-    else: 
-        if args.verbosity>0: print("Found files in {}, continuing...".format(args.aipsid))
+    if success<=0:
+        sys.exit("No catalogues with INNAME {} in AIPSid {}!".format(args.experiment.upper(),
+                                                                     args.aipsid))
+    else:
+        if args.verbosity>0:
+            print("Found files in {}, continuing...".format(args.aipsid))
         pass
-    
+
 
     '''
         Check whether data has been calibrated sufficiently
@@ -113,18 +120,19 @@ def main():
     if len(targets)>1: sys.exit("More than one possible target found, targets: {}".format(targets))
     target     = targets[-1]
     if args.verbosity>0: print("Found target {}".format(target))
-    
+
 
     '''
         Now look for SPLIT catalogue entries. They should be in disk 1
     '''
-    cdata = []   
+    cdata = []
     for i in range(len(calibrators)):
         if AIPSUVData(calibrators[i],"SPLIT",args.disk,1).exists():
             if args.verbosity>0: print("Found file {}.SPLIT.{}.1".format(calibrators[i],args.disk))
             cdata.append(AIPSUVData(calibrators[i],"SPLIT",args.disk,1))
         else:
-            print("Could not find catalogue {}.SPLIT.{}.1".format(calibrators[i]),args.disk)
+            #pdb.set_trace()
+            print("Could not find catalogue {}.SPLIT.{}.1".format(calibrators[i],args.disk))
 
 
     '''
@@ -135,7 +143,7 @@ def main():
     if args.verbosity>0:
     	for cal_split in cdata:
     		print cal_split
-    
+
 #    print args
 #    pdb.set_trace()
     for cal_split in cdata:
@@ -174,9 +182,12 @@ def main():
         snr[i] = wim.header.datamax/rms
         x[i]   = ew[ind]
         y[i]   = ns[ind]
-        print("{0:s} {1:+7.4f} {2:+7.4f}".format(wim.name,ew[ind][0],ns[ind][0]))
+        print("{0:s} {1:+7.4f} {2:+7.4f} {3:4.1f}".format(wim.name,
+        													ew[ind][0],
+        													ns[ind][0],
+        													snr[i]))
         if args.delete>0: wim.zap()
-    
+
     if args.verbosity>0:
         print ''
         print -x
@@ -216,8 +227,7 @@ def _image(indata,niter=200,gain=0.1,cell=1.0e-4,imsize=1024,seq=99):
 
 def _zapbeam(inname,disk,seq=99):
     beam=AIPSImage(inname,"IBM001",disk,seq)
-    if beam.exists():
-        beam.zap()
+    if beam.exists(): beam.zap()
 
 
 def check_sncl(indata,sn,cl):

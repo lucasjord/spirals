@@ -61,10 +61,11 @@
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
 # 2021/11/30 Added run_wa_pang routine - LJH                                 #
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
+# 2023/05/25 Moved CVEL to before position shifts - LJH
 #                                                                            #
 ##############################################################################
 
-version_date='2023/03/23'
+version_date='2023/05/25'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -430,7 +431,7 @@ def loadindx(filepath,filename,outname,outclass,
     if os.path.exists(filepath+filename):
         mprint('File exists!',logfile)
     else:
-        raise RuntimeError('File does not exists!')
+        raise RuntimeError('File {} does not exists!'.format(filepath+filename))
 
     fitld = AIPSTask('FITLD')
     fitld.datain   = filepath+filename
@@ -1209,11 +1210,16 @@ def runprtsn(indata):
 
     os.system('cp '+namma+'_RATE_MDEL_1.DAT '+namma+'_RATE_MDEL.DAT')
 
-    prtab.box[1][4] = 18
-    prtab.box[2][1] = 24
-    prtab.box[2][2] = 26
-    prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
-    prtab()
+    # do second polarisation if present
+    if len(indata.stokes)>1:
+    	prtab.box[1][4] = 18
+    	prtab.box[2][1] = 24
+    	prtab.box[2][2] = 26
+    	prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
+    	prtab()
+        # now combining the two .DAT files
+        n_lines = int(list(os.popen("wc -l "+namma+"_RATE_MDEL_2.DAT | cut -d ' ' -f 1".format()))[0])-22
+        os.system("tail -{1:} {0:}_RATE_MDEL_2.DAT >> {0:}_RATE_MDEL.DAT".format(namma,n_lines))
 
 
 ##############################################################################
@@ -1399,7 +1405,7 @@ def fringegeo(indata, refant):
     fringe.solint      = 6
     fringe.weightit    = 3
     fringe.aparm[1:]   = [2, 0, d3, 0, d5, 0, 3]
-    fringe.dparm[1:]   = [1, 30, 100, 0]
+    fringe.dparm[1:]   = [1, 40, 100, 0]
     fringe.dparm[4]    = 0
     fringe.dparm[8]    = 0
     fringe.snver       = 2
@@ -2762,7 +2768,7 @@ def get_split_sources(indata, target, cvelsource, calsource):
 ##############################################################################
 #
 def mafringe(indata, fr_image, calsource, channel, refant, outdisk, 
-             doband, bpver, dpfour, num_if=4):
+             doband, bpver, dpfour, num_ifs=4, apthree=0):
     '''
     Maser reference channel fringe fitting subroutine. Splits out reference,
     makes a temp uvdata file with the equivalent number of IFs as the cont
@@ -2817,6 +2823,9 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
         multidata.clrstat()
         multidata.zap()
     multi()
+ 
+    # now delete single source split i.e. CH***
+    splitdata.zap()
 
     indxr           = AIPSTask('INDXR')
     indxr.indata    = multidata
@@ -2831,19 +2840,19 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     for i in (np.arange(0,np.log2(num_ifs),1)+1):
         vbglu.outname = reducedname
         vbglu.outdisk = outdisk
-        vbglu.outcl   = '{}IF'.format(2**i)
+        vbglu.outcl   = '{}IF'.format(int(2**i))
         # checking for and deleting old versions of outdata
-        vbgludata = AIPSUVData(reducedname, vbgludata.outcl, outdisk, 1)
+        vbgludata = AIPSUVData(reducedname, vbglu.outcl, outdisk, 1)
         if vbgludata.exists():
             vbgludata.clrstat()
             vbgludata.zap()
         # running vbglu - makes vbgludata
         vbglu()
         # setting up for next loop
-        #AIPSUVData(vbgludata.inname, vbgludata.inclass, vbgludata.indisk, vbgludata.inseq).zap()
+#        vbglu.indata.zap()
         #
         vbglu.indata  = vbgludata
-        vbglu.in2data = vbgludata        
+        vbglu.in2data = vbgludata
 
     indxr.indata    = vbgludata
     indxr()
@@ -2867,8 +2876,9 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     fringe.docal         = 1
     fringe.calsour[1]    = ''
     fringe.solint        = 6
-    fringe.aparm[1:]     = [2, 0, 0, 0, 0]
-    fringe.aparm[7]      = 3
+    fringe.aparm[1:]     = [2, 0]
+    fringe.aparm[3]      = apthree
+    fringe.aparm[7]      = 2
     fringe.dparm[1:]     = [1, -1, 0, 0]
     fringe.dparm[4]      = dpfour
     fringe.snver         = 0
@@ -2995,7 +3005,7 @@ def runprtmasu(indata,channel):
 
 ##############################################################################
 #
-def runcvel(indata, cvelsource, vel, inter_flag, doband, bpver):
+def runcvel(indata, cvelsource, vel, inter_flag, doband, bpver, gainu=7):
 
     print 'Running CVEL.'
     if inter_flag==1:
@@ -3033,7 +3043,7 @@ def runcvel(indata, cvelsource, vel, inter_flag, doband, bpver):
     cvel.source[1:] = cvelsource
     cvel.outna = cvel.inna
     cvel.outcl = cvel.incl
-    cvel.gainuse = 7
+    cvel.gainuse = gainu
     cvel.freqid = 1
     cvel.outseq = cvel.inseq+1
     cvel.outdisk = cvel.indisk
@@ -5165,6 +5175,9 @@ if 'imv_app_flag' in locals() and globals(): pass
 else: imv_app_flag = 0
 if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
+if 'apthree' in locals() and globals(): pass
+else: apthree = 0
+
 
 ##############################################################################
 # Start main script
@@ -5472,6 +5485,8 @@ mprint('######################',logfile)
 
 line_data  = data[line]
 cont_data  = data[cont]
+line_data2 = AIPSUVData(line_data.name,line_data.klass,line_data.disk,2)
+cont_data2 = AIPSUVData(cont_data.name,cont_data.klass,cont_data.disk,2)
 
 if RDBE_check==2:
     newdata=get_phasecal_sources(cont_data,mp_source,logfile)
@@ -5488,6 +5503,50 @@ if not antname == 'LBA':
 else:
     ''
 
+###################################################################
+# going to slip new CVEL in here
+#data[line] = line_data2
+# if bandcal==['']:
+#     doband = -1
+#     bpver  = -1
+# else:
+#     doband = 1
+#     bpver  = 1
+
+# if cvel_flag==1:
+#     check_sncl(line_data, 0, 1,logfile)
+#     check_sncl(cont_data, 0, 1,logfile)
+#     calsource = findcal(line_data, calsource)
+#     if isinstance(cvelsource, str):
+#         cvelsource=[cvelsource]
+#     if cvelsource[0]=='':
+#         cvelsource[0]=calsource
+#     runcvel(line_data,cvelsource,vel,inter_flag, doband, bpver, gainu=1)
+
+# if possm_flag==1:
+#     if refant_flag==1:
+#         refant=select_refant(line_data)
+#     if line_data2.exists():
+#         line_data2.clrstat()
+#     calsource = findcal(line_data, cvelsource[0])
+
+#     tv=AIPSTV.AIPSTV()
+#     if tv.exists()==False: tv.start()
+
+#     rep='Y'
+#     while (rep=='Y' or rep=='y' or rep=='yes'):
+#         if line_data2.exists():
+#             mprint('Using shifted data (CVEL).',logfile)
+#             runpossm(line_data2, calsource, refant, tv, doband, bpver)
+#         else:
+#             mprint('Using unshifted data (CVEL).',logfile)
+#             runpossm(line_data, calsource, refant, tv, doband, bpver)
+#         rep=raw_input('Repeat POSSM with different channels? (y/n) ')
+
+#     channel=input('Enter channel for fringe fit: ')
+
+##############################################################################
+
 if do_geo_block==1 and pr_prep_flag==1 and delzn_flag==0:
     for i in pr_data_nr:
         if (get_ant(geo_data)==get_ant(data[i])):
@@ -5500,7 +5559,7 @@ if do_geo_block==1 and pr_prep_flag==1 and delzn_flag==0:
     checkatmos(inter_flag, logfile)
     mprint('####################################',logfile)
 
-n=0
+n = 0
 for i in pr_data_nr:
     n=n+1
     pr_data = data[i]
@@ -5675,6 +5734,9 @@ for i in pr_data_nr:
         check_sncl(pr_data, 3, 7,logfile)
         do_band(pr_data, bandcal, logfile)
 
+
+# # old cvel section
+
 line_data  = data[line]
 cont_data  = data[cont]
 line_data2 = AIPSUVData(line_data.name,line_data.klass,line_data.disk,2)
@@ -5738,7 +5800,7 @@ if ma_fringe_flag==1 and line != cont:
     if os.path.exists('multiview/struct_phase.inp'):
         os.remove('multiview/struct_phase.inp')
 
-    check_sncl(line_data, 3, 7,logfile)
+    check_sncl(line_data2, 3, 7,logfile)
     check_sncl(cont_data, 3, 7,logfile)
 
     calsource = findcal(line_data, calsource)
@@ -5755,15 +5817,21 @@ if ma_fringe_flag==1 and line != cont:
         line_used = line_data
 
     # get number of IFs
-    NIF = cont_data.header['naxis'][1]
-    (outdata1,outdata2)=mafringe(line_used, fr_image, calsource, channel, refant, line_data2.disk, doband, bpver, dpfour, num_if=NIF)
-    runtacop(outdata1, line_used, 'SN', 1, 4, 1)
-    runtacop(outdata2, cont_data, 'SN', 1, 4, 1)
+    NIF = cont_data.header['naxis'][3]
+    (outdata1,outdata2)=mafringe(line_used, fr_image, calsource, channel, refant, line_data2.disk, 
+                                 doband, bpver, dpfour, num_ifs=NIF, apthree=apthree)
+    runtacop(outdata1, line_used, 'SN', 1, 4, 1) # 1IF -> line
+    runtacop(outdata2, cont_data, 'SN', 1, 4, 1) # NIF -> cont
 
-    outdata1.clrstat()
-    outdata1.zap()
-    outdata2.clrstat()
-    outdata2.zap()
+    # delete annoying IF catalogue entries
+    for i in (np.arange(0,np.log2(NIF)+0.1,1)):
+        outdata = AIPSUVData(outdata1.name,'{}IF'.format(int(2**i)),outdata1.disk,1)
+        mprint('################################',logfile)
+        mprint('Deleting {}'.format(outdata),logfile)
+        mprint('################################',logfile)
+        outdata.clrstat()
+        outdata.zap()
+
     
     runclcal(line_used, 4, 7, 8, '', 1, refant)
     if snflg_flag==1:
@@ -5911,7 +5979,6 @@ if print_sn_flag==1:
         mprint('######################',logfile)
 
 if co_imagr_flag==1:   
-
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
 
     for source in split_sources:
@@ -5927,8 +5994,7 @@ if ma_imagr_flag==1:
     for source in cvelsource:
          split_data=AIPSUVData(source,split_outcl,line_data.disk,1)
          if split_data.exists():
-             if len(split_data.name)>=12:
-                 print split_data.name
+             if len(split_data.name)>12:
                  split_data.rename(split_data.name[0:8],split_data.klass,split_data.seq)
              runmaimagr(split_data, source, niter, cellsize, imsize,channel,
                         -1, imna, uvwtfn, robust, beam,baselines=ant_bls,gainu=8)
@@ -5954,6 +6020,19 @@ if fittp_flag==1:
     mprint('########################################################', logfile)
     for source in split_sources:
         run_fittp_data(source, split_outcl, defdisk, logfile)
+
+    cvelsource = findcvelsource(line_data, cvelsource)
+    for source in cvelsource:
+        run_fittp_data(source, split_outcl, defdisk, logfile)
+    mprint('########################################################', logfile)
+
+if fittp_flag==2:
+
+    #split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
+
+    mprint('########################################################', logfile)
+    #for source in split_sources:
+    #    run_fittp_data(source, split_outcl, defdisk, logfile)
 
     cvelsource = findcvelsource(line_data, cvelsource)
     for source in cvelsource:
@@ -6114,14 +6193,14 @@ if imultiv_flag==1:
         t = z[:,1]               #time
         p = np.matrix(z[:,3::2]) #phase
         p[np.where(p <= -999.)] = None
-        #    
+        #
         # unwrapping phase
         correction = np.zeros(shape=(len(t),Nquas))
         qstruct    = np.zeros(shape=(len(t),Nquas))
         #
 
         ''' new unwrapping technique 
-        
+
         old way was just to use numpy.diff logic to find large jumps moving forward in time.
         However, since early times might be low elevation, this often might cause the phase to be unwrapped
         over the whole track referenced to a point where there was a phase wrap ambiguity. Now I unwrap it close
@@ -6129,7 +6208,7 @@ if imultiv_flag==1:
         be large time differences between MVBs, I also treat each block separately. This means there is an extra
         file for user defined block offsets - LJH
         '''
-  
+
         # determine number of multiview blocks
         mvb_block_boundaries = t[np.where(np.diff(t)*24*30>10)]+15/(24*60)
         N = len(mvb_block_boundaries)+1
@@ -6137,42 +6216,42 @@ if imultiv_flag==1:
         nboundaryindx = np.zeros(shape=(N-1,))
         for i in range(N-1):
             nboundaryindx[i] = abs( t - mvb_block_boundaries[i]).argmin()
-        
+
         # automatically try and unwrap blocks from the 'middle' boundary (re time)
         p2 = np.copy(p)
         for nb in range(N-1):
             if nb==0:
                 # go down from first mbv
-                for j in range(Nquas):    
+                for j in range(Nquas):
                     for i in range(p[:int(nboundaryindx[0]),j].shape[0]-1):
-                        if   (p2[:int(nboundaryindx[0]),j][-i-2]-p2[:int(nboundaryindx[0]),j][-i-1])<-180.0:  
+                        if   (p2[:int(nboundaryindx[0]),j][-i-2]-p2[:int(nboundaryindx[0]),j][-i-1])<-180.0:
                             dp = +360
-                        elif (p2[:int(nboundaryindx[0]),j][-i-2]-p2[:int(nboundaryindx[0]),j][-i-1])>+180.0: 
+                        elif (p2[:int(nboundaryindx[0]),j][-i-2]-p2[:int(nboundaryindx[0]),j][-i-1])>+180.0:
                             dp = -360
                         else: dp = 0.0
                         p2[:int(nboundaryindx[0]),j][-i-2] = p[:int(nboundaryindx[0]),j][-i-2] + dp
             else:
                 # go up for middle blocks
-                for j in range(Nquas):    
+                for j in range(Nquas):
                     for i in range(p[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j].shape[0]-1):
                         if   (p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i+1]
-                              -p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i])<-180.0:  
+                              -p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i])<-180.0:
                             dp = +360;
                         elif (p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i+1]
-                              -p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i])>+180.0: 
+                              -p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i])>+180.0:
                             dp = -360;
                         else: dp = 0.0
                         p2[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i+1] = p[int(1+nboundaryindx[nb-1]):int(nboundaryindx[nb]),j][i+1] + dp
 
         # go up for last block
-        for j in range(Nquas):    
+        for j in range(Nquas):
                 for i in range(p[int(1+nboundaryindx[nb]):,j].shape[0]-1):
-                        if  (p2[int(1+nboundaryindx[nb]):,j][i+1]-p2[int(1+nboundaryindx[nb]):,j][i])<-180.0:  
+                        if  (p2[int(1+nboundaryindx[nb]):,j][i+1]-p2[int(1+nboundaryindx[nb]):,j][i])<-180.0:
                             dp = +360;
-                        elif (p2[int(1+nboundaryindx[nb]):,j][i+1]-p2[int(1+nboundaryindx[nb]):,j][i])>+180.0: 
+                        elif (p2[int(1+nboundaryindx[nb]):,j][i+1]-p2[int(1+nboundaryindx[nb]):,j][i])>+180.0:
                             dp = -360;
                         else: dp = 0.0
-                        p2[int(1+nboundaryindx[nb]):,j][i+1] = p[int(1+nboundaryindx[nb]):,j][i+1] + dp   
+                        p2[int(1+nboundaryindx[nb]):,j][i+1] = p[int(1+nboundaryindx[nb]):,j][i+1] + dp
 
         correction = correction + (p2 - p) # add in corrections
         ## 
