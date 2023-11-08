@@ -264,6 +264,15 @@ def get_center_freq(indata):
 
 ##############################################################################
 # Download TEC maps
+def utctogpsweek(utc):
+    """ Returns the GPS week 
+    input, utc time as datetime.datetime object"""
+    leapseconds = 27
+    datetimeformat = "%Y-%m-%d %H:%M:%S"
+    epoch = datetime.datetime.strptime("1980-01-06 00:00:00",datetimeformat)
+    tdiff = utc -epoch  + datetime.timedelta(seconds=leapseconds)
+    gpsweek = tdiff.days // 7 
+    return gpsweek
 #
 def get_TEC(year,doy,TECU_model):
     year=str(year)[2:4]
@@ -279,7 +288,34 @@ def get_TEC(year,doy,TECU_model):
     else:
         #path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
         path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
-        #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        print(path+name+'.Z')
+#        os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
+        os.popen(r'uncompress -f '+name+'.Z')
+#
+def get_TEC2(year,doy,TECU_model):
+'''WWWW/IGS0OPSTYP_YYYYDDDHHMM_01D_SMP_CNT.INX.gz where 
+WWWW - gpsweek
+TYP  - solution type - FIN or RAP
+YYYY - year
+DDD  - doy
+HH   - hour
+MM   - minute
+SMP  - temporal product sampling resolution
+CNT  - content type (either GIM or ROT)
+'''
+    year=str(year)[2:4]
+    if doy<10:
+        doy='00'+str(doy)
+    elif doy<100:
+        doy='0'+str(doy)
+    else:
+        doy=str(doy)
+    name='IGS0OPS{}_{}{}{}{}_01D_{}_{}.INX.gz'.format(typ,year,doy,hour,)
+    if os.path.exists(name):
+        print 'File already there.'
+    else:
+        path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
         os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
         os.popen(r'uncompress -f '+name+'.Z')
 
@@ -5277,9 +5313,12 @@ if pr_prep_flag==1 or geo_prep_flag==1:
         num_days=get_num_days(data[pr_data_nr[0]])
 
     doy=get_day_of_year(year, month, day)
-    
-    get_TEC(year,doy,TECU_model)
-    if not os.path.exists(eop_path):
+    gpsweek=utctoweek(utc_dt)
+    if gpsweek<=2238:
+        get_TEC(year,doy,TECU_model)
+   else:
+        get_TEC2(gpsweek)
+   if not os.path.exists(eop_path):
         os.mkdir(eop_path)
     get_eop(eop_path)
 
