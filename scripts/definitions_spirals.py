@@ -282,43 +282,23 @@ def get_TEC(year,doy,TECU_model):
         doy='0'+str(doy)
     else:
         doy=str(doy)
-    name=TECU_model+doy+'0.'+year+'i'
+    name  =TECU_model+doy+'0.'+year+'i'
+    name2 = 'JPL0OPSFIN_20{}{}0000_01D_02H_GIM.INX'.format(year,doy)
     if os.path.exists(name):
         print 'File already there.'
+    elif os.path.exists(name2):
+    	os.popen(r'cp '+name2+' '+name)
     else:
         #path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
-        path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
-        print(path+name+'.Z')
-#        os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
-        os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
-        os.popen(r'uncompress -f '+name+'.Z')
+        #path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
+        path = 'https://cddis.nasa.gov/archive/gnss/products/ionex/20{:0}/{:1}/'.format(year,doy)
+        #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        #os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
+        #os.popen(r'uncompress -f '+name+'.Z')
+        os.popen(r'curl -c ~/.urs_cookies -b ~/.urs_cookies -n -L -O '+path+name2+'.gz')
+        os.popen(r'gunzip -f '+name2+'.gz')
+        os.popen(r'cp '+name2+' '+name)
 #
-def get_TEC2(year,doy,TECU_model):
-'''WWWW/IGS0OPSTYP_YYYYDDDHHMM_01D_SMP_CNT.INX.gz where 
-WWWW - gpsweek
-TYP  - solution type - FIN or RAP
-YYYY - year
-DDD  - doy
-HH   - hour
-MM   - minute
-SMP  - temporal product sampling resolution
-CNT  - content type (either GIM or ROT)
-'''
-    year=str(year)[2:4]
-    if doy<10:
-        doy='00'+str(doy)
-    elif doy<100:
-        doy='0'+str(doy)
-    else:
-        doy=str(doy)
-    name='IGS0OPS{}_{}{}{}{}_01D_{}_{}.INX.gz'.format(typ,year,doy,hour,)
-    if os.path.exists(name):
-        print 'File already there.'
-    else:
-        path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
-        os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
-        os.popen(r'uncompress -f '+name+'.Z')
-
 def check_geo(indata):
     nx_table = indata.table('AIPS NX', 0)
     n_block  = 1
