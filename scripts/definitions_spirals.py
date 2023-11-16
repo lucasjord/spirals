@@ -61,11 +61,11 @@
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
 # 2021/11/30 Added run_wa_pang routine - LJH                                 #
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
-# 2023/05/25 Moved CVEL to before position shifts - LJH
+# 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                      #
 #                                                                            #
 ##############################################################################
 
-version_date='2023/05/25'
+version_date='2023/11/16'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -274,7 +274,7 @@ def utctogpsweek(utc):
     gpsweek = tdiff.days // 7 
     return gpsweek
 #
-def get_TEC(year,doy,TECU_model):
+def get_TEC_old(year,doy,TECU_model):
     year=str(year)[2:4]
     if doy<10:
         doy='00'+str(doy)
@@ -283,21 +283,36 @@ def get_TEC(year,doy,TECU_model):
     else:
         doy=str(doy)
     name  =TECU_model+doy+'0.'+year+'i'
+    if os.path.exists(name):
+        print 'File already there.'
+    else:
+        #path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
+        path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
+        #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
+        os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
+        os.popen(r'uncompress -f '+name+'.Z')
+#
+def get_TEC_new(year,doy):
+    year=str(year)[2:4]
+    if doy<10:
+        doy='00'+str(doy)
+    elif doy<100:
+        doy='0'+str(doy)
+    else:
+        doy=str(doy)
+    name  = TECU_model+doy+'0.'+year+'i'
     name2 = 'JPL0OPSFIN_20{}{}0000_01D_02H_GIM.INX'.format(year,doy)
     if os.path.exists(name):
         print 'File already there.'
     elif os.path.exists(name2):
     	os.popen(r'cp '+name2+' '+name)
     else:
-        #path='ftp://cddis.gsfc.nasa.gov/gps/products/ionex/20'+year+'/'+doy+'/'
-        #path='ftp://gdc.cddis.eosdis.nasa.gov/gnss/products/ionex/20'+year+'/'+doy+'/'
-        path = 'https://cddis.nasa.gov/archive/gnss/products/ionex/20{:0}/{:1}/'.format(year,doy)
-        #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
-        #os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
-        #os.popen(r'uncompress -f '+name+'.Z')
-        os.popen(r'curl -c ~/.urs_cookies -b ~/.urs_cookies -n -L -O '+path+name2+'.gz')
+        path = 'https://cddis.nasa.gov/archive/gnss/products/ionex/20{0:}/{1:}/'.format(year,doy)
+        #print 'curl -c .urs_cookies -b .urs_cookies -n -L -O '+path+name2+'.gz'
+        os.popen(r'curl -c .urs_cookies -b .urs_cookies -n -L -O '+path+name2+'.gz')
         os.popen(r'gunzip -f '+name2+'.gz')
         os.popen(r'cp '+name2+' '+name)
+
 #
 def check_geo(indata):
     nx_table = indata.table('AIPS NX', 0)
@@ -5291,18 +5306,18 @@ if pr_prep_flag==1 or geo_prep_flag==1:
     else:
         (year, month, day)=get_observation_year_month_day(data[pr_data_nr[0]])
         num_days=get_num_days(data[pr_data_nr[0]])
-
+    #pdb.set_trace()
     doy=get_day_of_year(year, month, day)
-    gpsweek=utctoweek(utc_dt)
+    gpsweek=utctogpsweek(datetime.datetime(year,month,day))
     if gpsweek<=2238:
-        get_TEC(year,doy,TECU_model)
-   else:
-        get_TEC2(gpsweek)
-   if not os.path.exists(eop_path):
+        get_TEC_old(year,doy,TECU_model)
+        if num_days==2: get_TEC_old(year,doy+1,TECU_model)
+    else:
+        get_TEC_new(year,doy)
+        if num_days==2: get_TEC_new(year,doy+1)
+    if not os.path.exists(eop_path):
         os.mkdir(eop_path)
     get_eop(eop_path)
-
-    if num_days==2: get_TEC(year,doy+1,TECU_model)
 
 mprint('######################',logfile)
 mprint(get_time(),logfile)
