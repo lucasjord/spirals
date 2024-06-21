@@ -5306,14 +5306,18 @@ if pr_prep_flag==1 or geo_prep_flag==1:
     else:
         (year, month, day)=get_observation_year_month_day(data[pr_data_nr[0]])
         num_days=get_num_days(data[pr_data_nr[0]])
-    #pdb.set_trace()
     doy=get_day_of_year(year, month, day)
     gpsweek=utctogpsweek(datetime.datetime(year,month,day))
     if gpsweek<=2238:
+        get_TEC_old(year,doy-1,TECU_model)
         get_TEC_old(year,doy,TECU_model)
-        if num_days==2: get_TEC_old(year,doy+1,TECU_model)
+        get_TEC_old(year,doy+1,TECU_model)
+#        if num_days==2:
+#            get_TEC_old(year,doy+1,TECU_model)
     else:
+        get_TEC_new(year,doy-1)
         get_TEC_new(year,doy)
+        get_TEC_new(year,doy+1)
         if num_days==2: get_TEC_new(year,doy+1)
     if not os.path.exists(eop_path):
         os.mkdir(eop_path)
@@ -5650,7 +5654,6 @@ for i in pr_data_nr:
                 mprint('NOT running WAPANG on '+pr_data.name,logfile)
                 mprint('########################################',logfile)
                 runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
-            #pdb.set_trace()
             runpang(pr_data) #CL4 -> 4
             for source in pos_shift:
                 [ra, dec] = [pos_shift[source][0],pos_shift[source][1]]
@@ -5867,7 +5870,7 @@ if ma_fringe_flag==1 and line != cont:
         outdata.clrstat()
         outdata.zap()
 
-    
+
     runclcal(line_used, 4, 7, 8, '', 1, refant)
     if snflg_flag==1:
         runsnflg(cont_data, 4, calsource)
@@ -5945,7 +5948,7 @@ if co_fringe_flag==1 and line==cont:
     # delete infile for struct quasar phases
     if os.path.exists('multiview/struct_phase.inp'):
         os.remove('multiview/struct_phase.inp')
-    
+
     for (i,k) in get_ant(cont_data).items():
         if os.path.exists('multiview/block_{}_unwrapper.inp'.format(k)):
             os.remove('multiview/block_{}_unwrapper.inp'.format(k))
@@ -6194,7 +6197,7 @@ if imultiv_flag==1:
         mprint('MULTV1: Appears to have ended successfully',logfile)
         mprint('##########################################', logfile)
 
-    else: 
+    else:
         print 'MUTLV1: Purports to die of UNNATURAL causes'
         print 'Please check input files in ./multiview/'
         raise ValueError
@@ -6214,14 +6217,14 @@ if imultiv_flag==1:
     xy     = np.matrix(splitt(get_file('multiview/multiview_control.inp')[9:])[:,(0,2,3)].astype(float))
     x      = xy[:,1]; y = xy[:,2]; xy[:,0] = 1
     m      = np.ones(shape=(Nquas,3))
-    m[:,1] = np.array(x).reshape(Nquas) 
-    m[:,2] = np.array(y).reshape(Nquas) 
-    M      = np.matrix(m); 
+    m[:,1] = np.array(x).reshape(Nquas)
+    m[:,2] = np.array(y).reshape(Nquas)
+    M      = np.matrix(m);
     D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
     #
     count  = 0 #start data count at zero
     for n in ants.keys():
-        # use the outprint of the fortran programme as it has already done the work 
+        # use the outprint of the fortran programme as it has already done the work
         z = splitt(get_file('multiview/fort.1{}'.format(n))[2:]).astype(float)  # qso data
         f = splitt(get_file('multiview/fort.20{}'.format(n))[1:]).astype(float) # mark fit
         #
@@ -6234,7 +6237,7 @@ if imultiv_flag==1:
         qstruct    = np.zeros(shape=(len(t),Nquas))
         #
 
-        ''' new unwrapping technique 
+        ''' new unwrapping technique
 
         old way was just to use numpy.diff logic to find large jumps moving forward in time.
         However, since early times might be low elevation, this often might cause the phase to be unwrapped
@@ -6289,7 +6292,7 @@ if imultiv_flag==1:
                         p2[int(1+nboundaryindx[nb]):,j][i+1] = p[int(1+nboundaryindx[nb]):,j][i+1] + dp
 
         correction = correction + (p2 - p) # add in corrections
-        ## 
+        ##
         # make empty antenna-block-quasar file if it doesn't exist for user defined offsets
         # this file will be deleted at the fringe check stage and not overwritten here
         if not os.path.exists('multiview/block_{}_unwrapper.inp'.format(ants[n])):
@@ -6316,7 +6319,7 @@ if imultiv_flag==1:
         qstruct     = qstruct    + quas_str_phase[n-1,:]     # add user--defined quasar structure phase (not really used [yet?])
         # store unwrapped input data
         P.append(p+correction+qstruct)
-        
+        #
         # solve matrix equation
         lam  = np.array(D*(p+correction+qstruct).T)
         Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
@@ -6325,7 +6328,7 @@ if imultiv_flag==1:
         L.append(lam)
         if not n==refant:
             #mprint('Plotting antenna '+ants[n],logfile)
-
+            #
             fig, ax = plt.subplots(3,1,figsize=(10,14))
             # plot corrected phases
             ax[0].plot(t*24,p+correction+qstruct,'.');
@@ -6344,7 +6347,7 @@ if imultiv_flag==1:
             ax[2].legend([R'EW Slope',R'NS Slope'])
             ax[2].set_ylabel(R'Phase slope (deg/deg)')
             ax[2].set_xlabel(R'Time UTC (hr)')
-            # 
+            #
             ax[0].set_title('{}--{}'.format(ants[n],ants[refant]));
             fig.savefig('multiview/imv_fit_{}-{}-{}-{}.pdf'.format(cont_data.name,calsource,ants[n],ants[refant]),bbox_inches='tight')
         # make outfile content
@@ -6352,9 +6355,8 @@ if imultiv_flag==1:
             count = count+1
             content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
                     count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
-    
-    # get header from target,TBOUT and replace values 
 
+    # get header from target,TBOUT and replace values
     start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
     header = get_file('multiview/target.TBOUT')[:start+1]
     ender  = get_file('multiview/target.TBOUT')[-1]
@@ -6364,21 +6366,21 @@ if imultiv_flag==1:
     outfile = 'multiview/target.TBIN2'
     if os.path.exists(outfile): os.remove(outfile)
     outf = open(outfile,'a+')
-    for lin in header:    
+    for lin in header:
         print >> outf, lin
     outf.close()
     outf = open(outfile,'a+')
-    for lin in content: 
+    for lin in content:
         print >> outf, lin
     outf.close()
     outf = open(outfile,'a+')
     print >> outf, ender
     outf.close()
-    
+
     mprint('########################################################', logfile)
     mprint('MULTV2: Appears to have ended successfully',logfile)
     mprint('########################################################', logfile)
-    
+
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
@@ -6390,11 +6392,11 @@ if imultiv_flag==1:
 if imv_app_flag==1:
     if line!=cont:
         if line_data2.exists():
-            linedata = line_data2 
+            linedata = line_data2
         else: linedata = line_data
         linedata.clrstat()
         check_sncl(linedata, 5, 8,logfile)
-        
+
         replace('./multiview/target.TBIN2','nanE+00',"'INDE'  ")
         # SN6 + CL8 = CL9
         runtbin(linedata,'./multiview/target.TBIN')
@@ -6402,11 +6404,11 @@ if imv_app_flag==1:
         # SN7 + CL8 = CL10
         runtbin(linedata,'./multiview/target.TBIN2')
         runclcal(linedata,7,8,10,'',1,refant)
-    
+
     if line==cont:
         if cal_split.exists():
             check_sncl(cal_split,1,1,logfile)
-        
+
         replace('./multiview/target.TBIN2','nanE+00',"'INDE'  ")
         # SN2 + CL1 = CL2
         runtbin(cal_split,'./multiview/target.TBIN')
@@ -6414,17 +6416,17 @@ if imv_app_flag==1:
         # SN3 + CL1 = CL3
         runtbin(cal_split,'./multiview/target.TBIN2')
         runclcal(cal_split,3,1,3,'',1,refant)
-    
+
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
-    
+
 if imv_imagr_flag==1:
     imna1  = '-1IMV'
     imna2  = '-2IMV'
 
     if line!=cont:
-        if line_data2.exists(): 
+        if line_data2.exists():
             linedata = line_data2
         else: linedata = line_data
         linedata.clrstat()
@@ -6461,7 +6463,7 @@ if imv_imagr_flag==1:
 
             if len(calsource)>8:
                 calname = calsource[:8]
-            else: 
+            else:
                 calname = calsource
 
             runimagr(cal_split,calname,niter,cellsize,imsize,1,imna1,antennas,
