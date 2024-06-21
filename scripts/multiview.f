@@ -26,6 +26,7 @@ c     V4a: 2021 Aug 14: scaled fitted phases by sigma_pdf (if >=4 data)
 c     V4b: 2021 Aug 16: added "editing" of output phases when fitting
 c          error exceeds, say, 30deg      
 c     V4x  2021 Aug 21: made GREG friendly outputs for diagnostic plotting
+c     V4y  2024 Jun 21: 2 point "interpolation"
       
 c----------------------------
 
@@ -230,6 +231,27 @@ c                          Fit phases to a plane
      +                         ' at time',f8.5,': phase error=',f7.1)
                            endif
                            
+                        else
+
+                           write (lu_print,3000) n_good_QSOs, t_center
+
+                     endif
+
+                  else
+
+                     if ( num_QSO .eq. 2 ) then
+                         x_MV_new = (MV_real(1) + MV_real(2)) /2
+                         y_MV_new = (MV_imag(1) + MV_imag(2)) /2
+                         amp_mv    = sqrt(x_MV_new**2 + y_MV_new**2)
+                         phs_mv    = atan2(y_MV_new,x_MV_new)/degrad 
+                     endif
+
+                     if ( num_QSO .le. 1 ) write (lu_print,3000) num_QSOs, t_center
+ 3000                       format(' Not enough QSOs (',
+     +                      i1,') at UT',f10.5,' to fit MV plane.')
+
+               endif
+
                            if ( phs_mv_err .le. phase_err_limit ) then
 c                             Store for later output
                               n_store = n_store + 1
@@ -254,19 +276,6 @@ c                             Store for later output
      +                             /'      +/-',f10.0, 2f10.3)
                            endif
 
-                        else
-
-                           write (lu_print,3000) n_good_QSOs, t_center
-
-                     endif
-
-                  else
-
-                     write (lu_print,3000) num_QSOs, t_center
- 3000                format(' Not enough QSOs (',
-     +                      i1,') at UT',f10.5,' to fit MV plane.')
-
-               endif
 
             endif   ! target antenna number
                
@@ -1415,7 +1424,7 @@ c     Read QSO offsets...
 
 c     Document...
       n_QSOs = n
-      if ( n_QSOs .ge. 3 ) then
+      if ( n_QSOs .ge. 2 ) then
             do n = 1, n_QSOs
                write (lu_print,1000) QSO_name(n), source_number(n),  
      +                               QSO_offset_x(n), QSO_offset_y(n)
