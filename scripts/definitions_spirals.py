@@ -2913,6 +2913,7 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     fringe.aparm[7]      = 2
     fringe.dparm[1:]     = [1, -1, 0, 0]
     fringe.dparm[4]      = dpfour
+    fringe.dparm[8]      = dpeight
     fringe.snver         = 0
     fringe()
 
@@ -2947,6 +2948,7 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
     fringe.solint        = 6
     fringe.aparm[1:]     = [2, 0, 1, 0, 0]
     fringe.dparm[1:]     = [1, -1, 0, 0]
+    fringe.dparm[8]      = dpeight
     fringe.dparm[4]      = dpfour
     fringe.snver         = 4
     fringe.doband        = doband
@@ -5209,6 +5211,8 @@ if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
 if 'apthree' in locals() and globals(): pass
 else: apthree = 0
+if 'dpeight' in locals() and globals(): pass
+else: dpeight = 0
 
 
 ##############################################################################
