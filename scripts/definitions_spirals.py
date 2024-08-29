@@ -5008,6 +5008,7 @@ def splitt(old_list):
 def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',aparm7=0,chan=0,refant=0):
     calib             = AIPSTask('CALIB')
     calib.indata      = indata
+    calib.docalib     = docal
     calib.calsour[1:] = sources
     calib.gainu       = gainuse
     calib.snver       = snver
@@ -6160,7 +6161,7 @@ if imv_prep_flag==1:
     runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
     runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
     if line!=cont:
-        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant)
+        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=[cvelsource])
     elif line==cont:
         runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
 
