@@ -6161,7 +6161,7 @@ if imv_prep_flag==1:
     runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
     runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
     if line!=cont:
-        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=[cvelsource])
+        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=cvelsource)
     elif line==cont:
         runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
 
