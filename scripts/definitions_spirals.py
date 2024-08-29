@@ -5017,7 +5017,7 @@ def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='
     calib.aparm[7]    = aparm7
     calib.refant      = refant
     calib.inp()
-    calib.ichansel[1] = [chan,chan,0]
+    calib.ichansel[1] = [None,chan,chan,0]
     calib()
 
 def runsplat(indata,outdata,sources=[''],stokes='HALF',docal=-1):
