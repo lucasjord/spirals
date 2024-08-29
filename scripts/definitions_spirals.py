@@ -2890,7 +2890,7 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     indxr()
 
     # either choose calib or fringe
-    if use_calib==False: 
+    if use_calib==False:
         # running fring on the output data
         fringe               = AIPSTask('FRING')
 
@@ -2912,19 +2912,18 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
         fringe.solint        = 6
         fringe.aparm[1:]     = [2, 0]
         fringe.aparm[3]      = apthree
-        fringe.aparm[7]      = 3
-        fringe.dparm[1:]     = [1, -1, 20, 0]
+        fringe.aparm[7]      = 2
+        fringe.dparm[1:]     = [1, -1, 0, 0]
         fringe.dparm[4]      = dpfour
+        fringe.dparm[8]      = dpeight
         fringe.snver         = 0
         fringe()
-
         # run fringe on vbglu data for cont
         fringe.indata        = vbgludata
         fringe()
     else:
         # running fring on the output data
         calib               = AIPSTask('calib')
-
         if fr_image.exists():
             calib.in2data = fr_image
             mprint('################################################',logfile)
@@ -2980,6 +2979,7 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
     fringe.solint        = 6
     fringe.aparm[1:]     = [2, 0, 1, 0, 0]
     fringe.dparm[1:]     = [1, -1, 0, 0]
+    fringe.dparm[8]      = dpeight
     fringe.dparm[4]      = dpfour
     fringe.snver         = 4
     fringe.doband        = doband
@@ -5244,7 +5244,8 @@ if 'apthree' in locals() and globals(): pass
 else: apthree = 0
 if 'use_calib' in locals() and globals(): pass
 else: use_calib=False
-
+if 'dpeight' in locals() and globals(): pass
+else: dpeight = 0
 
 ##############################################################################
 # Start main script
