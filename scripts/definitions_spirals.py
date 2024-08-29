@@ -65,7 +65,7 @@
 #                                                                            #
 ##############################################################################
 
-version_date='2023/11/16'
+version_date='2024/08/29'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -5017,7 +5017,7 @@ def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='
     calib.aparm[7]    = aparm7
     calib.refant      = refant
     calib.ichansel[1:]= [chan,chan,0]
-    #calib.inp()
+    calib.inp()
     calib()
 
 def runsplat(indata,outdata,sources=[''],stokes='HALF',docal=-1):
@@ -6158,7 +6158,6 @@ if imv_prep_flag==1:
         cont_data2.zap()
 
     runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
-
     runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
     if line!=cont:
         runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant)
