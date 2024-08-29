@@ -305,7 +305,7 @@ def get_TEC_new(year,doy):
     if os.path.exists(name):
         print 'File already there.'
     elif os.path.exists(name2):
-    	os.popen(r'cp '+name2+' '+name)
+        os.popen(r'cp '+name2+' '+name)
     else:
         path = 'https://cddis.nasa.gov/archive/gnss/products/ionex/20{0:}/{1:}/'.format(year,doy)
         #print 'curl -c .urs_cookies -b .urs_cookies -n -L -O '+path+name2+'.gz'
@@ -1243,11 +1243,11 @@ def runprtsn(indata):
 
     # do second polarisation if present
     if len(indata.stokes)>1:
-    	prtab.box[1][4] = 18
-    	prtab.box[2][1] = 24
-    	prtab.box[2][2] = 26
-    	prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
-    	prtab()
+        prtab.box[1][4] = 18
+        prtab.box[2][1] = 24
+        prtab.box[2][2] = 26
+        prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
+        prtab()
         # now combining the two .DAT files
         n_lines = int(list(os.popen("wc -l "+namma+"_RATE_MDEL_2.DAT | cut -d ' ' -f 1".format()))[0])-22
         os.system("tail -{1:} {0:}_RATE_MDEL_2.DAT >> {0:}_RATE_MDEL.DAT".format(namma,n_lines))
@@ -2477,7 +2477,7 @@ def runapcal(indata, tyver, gcver, snver, dofit):
 ##############################################################################
 # runapcal added by Lucas Hyland Nov 2017 for LBA
 def runapcal_lba(indata, snver, inver, outver):
-    sqrtsefd        = {'AT': 9.48, 'CD': 28.3, 'HH': 22.36, 'HO': 31.6, 'MP': 25.10,
+    sqrtsefd        = {'AT': 9.48, 'CD': 21.2, 'HH': 22.36, 'HO': 31.6, 'MP': 25.10,
                        'PA': 7.42, 'WA': 25.5, 'KE': 54.77, 'YG': 60.0, 'HB': 54.77}
     ant             = get_ant(indata)
     check_sncl(indata, snver, inver, logfile)
@@ -2889,36 +2889,69 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     indxr.indata    = vbgludata
     indxr()
 
-    # running fring on the output data
-    fringe               = AIPSTask('FRING')
+    # either choose calib or fringe
+    if use_calib==False: 
+        # running fring on the output data
+        fringe               = AIPSTask('FRING')
 
-    if fr_image.exists():
-        fringe.in2data = fr_image
-        mprint('################################################',logfile)
-        mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on diks '+str(int(fringe.in2disk)), logfile)
-        mprint('################################################',logfile)
+        if fr_image.exists():
+            fringe.in2data = fr_image
+            mprint('################################################',logfile)
+            mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on diks '+str(int(fringe.in2disk)), logfile)
+            mprint('################################################',logfile)
+        else:
+            mprint('################################################',logfile)
+            mprint('Using point source as imput model for fringe.',logfile)
+            mprint('################################################',logfile)
+
+        # run fringe on maser channel data for line
+        fringe.indata        = multidata
+        fringe.refant        = refant
+        fringe.docal         = 1
+        fringe.calsour[1]    = ''
+        fringe.solint        = 6
+        fringe.aparm[1:]     = [2, 0]
+        fringe.aparm[3]      = apthree
+        fringe.aparm[7]      = 3
+        fringe.dparm[1:]     = [1, -1, 20, 0]
+        fringe.dparm[4]      = dpfour
+        fringe.snver         = 0
+        fringe()
+
+        # run fringe on vbglu data for cont
+        fringe.indata        = vbgludata
+        fringe()
     else:
-        mprint('################################################',logfile)
-        mprint('Using point source as imput model for fringe.',logfile)
-        mprint('################################################',logfile)
+        # running fring on the output data
+        calib               = AIPSTask('calib')
 
-    # run fringe on maser channel data for line
-    fringe.indata        = multidata
-    fringe.refant        = refant
-    fringe.docal         = 1
-    fringe.calsour[1]    = ''
-    fringe.solint        = 6
-    fringe.aparm[1:]     = [2, 0]
-    fringe.aparm[3]      = apthree
-    fringe.aparm[7]      = 2
-    fringe.dparm[1:]     = [1, -1, 0, 0]
-    fringe.dparm[4]      = dpfour
-    fringe.snver         = 0
-    fringe()
+        if fr_image.exists():
+            calib.in2data = fr_image
+            mprint('################################################',logfile)
+            mprint('Using input model '+calib.in2name+'.'+calib.in2class+'.'+str(int(calib.in2seq))+' on diks '+str(int(calib.in2disk)), logfile)
+            mprint('################################################',logfile)
+        else:
+            mprint('################################################',logfile)
+            mprint('Using point source as imput model for calib.',logfile)
+            mprint('################################################',logfile)
 
-    # run fringe on vbglu data for cont
-    fringe.indata        = vbgludata
-    fringe()
+        # run fringe on maser channel data for line
+        calib.indata        = multidata
+        calib.refant        = refant
+        calib.docal         = 1
+        calib.calsour[1]    = ''
+        calib.solmode       = 'P'
+        calib.soltype       = 'L1R'
+        calib.solint        = 6
+        calib.snver         = 0
+        calib.aparm[1:]     = [2, 0]
+        calib.aparm[3]      = apthree
+        calib.aparm[7]      = 3
+        calib()
+
+        # run fringe on vbglu data for cont
+        calib.indata        = vbgludata
+        calib()
 
     return multidata, vbgludata
 
@@ -5209,6 +5242,8 @@ if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
 if 'apthree' in locals() and globals(): pass
 else: apthree = 0
+if 'use_calib' in locals() and globals(): pass
+else: use_calib=False
 
 
 ##############################################################################
@@ -6191,7 +6226,7 @@ if imultiv_flag==1:
 
     os.chdir('./multiview/')
 
-    mv_task = os.system(mv_path+'multiview_4x 2>&1 | tee multiview_4x.prt')
+    mv_task = os.system(mv_path+'multiview 2>&1 | tee multiview_4x.prt')
     if mv_task==0:
         mprint('##########################################', logfile)
         mprint('MULTV1: Appears to have ended successfully',logfile)
@@ -6220,8 +6255,9 @@ if imultiv_flag==1:
     m[:,1] = np.array(x).reshape(Nquas)
     m[:,2] = np.array(y).reshape(Nquas)
     M      = np.matrix(m);
-    D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
-    #
+    #pdb.set_trace()
+    if Nquas>=3:
+        D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
     count  = 0 #start data count at zero
     for n in ants.keys():
         # use the outprint of the fortran programme as it has already done the work
@@ -6321,12 +6357,13 @@ if imultiv_flag==1:
         P.append(p+correction+qstruct)
         #
         # solve matrix equation
-        lam  = np.array(D*(p+correction+qstruct).T)
-        Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
-        lam[0][np.nanmean(abs(Res),axis=1)>60]=None #'flag' data with too high residuals
-        # store parms
-        L.append(lam)
-        if not n==refant:
+        if Nquas>=3:
+            lam  = np.array(D*(p+correction+qstruct).T)
+            Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
+            lam[0][np.nanmean(abs(Res),axis=1)>60]=None #'flag' data with too high residuals
+            # store parms
+            L.append(lam)
+        if not n==refant and Nquas>=3:
             #mprint('Plotting antenna '+ants[n],logfile)
             #
             fig, ax = plt.subplots(3,1,figsize=(10,14))
@@ -6351,10 +6388,11 @@ if imultiv_flag==1:
             ax[0].set_title('{}--{}'.format(ants[n],ants[refant]));
             fig.savefig('multiview/imv_fit_{}-{}-{}-{}.pdf'.format(cont_data.name,calsource,ants[n],ants[refant]),bbox_inches='tight')
         # make outfile content
-        for j in range(len(t)):
-            count = count+1
-            content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                    count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
+        if Nquas>=3:
+            for j in range(len(t)):
+                count = count+1
+                content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                        count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
 
     # get header from target,TBOUT and replace values
     start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
@@ -6365,17 +6403,20 @@ if imultiv_flag==1:
     # print data to target.TBIN2 as SN 7
     outfile = 'multiview/target.TBIN2'
     if os.path.exists(outfile): os.remove(outfile)
-    outf = open(outfile,'a+')
-    for lin in header:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    for lin in content:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    print >> outf, ender
-    outf.close()
+    if Nquas>=3:
+        outf = open(outfile,'a+')
+        for lin in header:
+            print >> outf, lin
+        outf.close()
+        outf = open(outfile,'a+')
+        for lin in content:
+            print >> outf, lin
+        outf.close()
+        outf = open(outfile,'a+')
+        print >> outf, ender
+        outf.close()
+    else:
+       os.system('cp multiview/target.TBIN multiview/target.TBIN2')
 
     mprint('########################################################', logfile)
     mprint('MULTV2: Appears to have ended successfully',logfile)
