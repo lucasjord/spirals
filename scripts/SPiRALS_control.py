@@ -260,10 +260,10 @@ co_imagr_flag   = 0      # Image continuum (target) sources?
 ma_imagr_flag   = 0      # Image one channel of line (cvel-)sources?
 cube_imagr_flag = 0      # Image data cube of line (cvel-)sources?
 #
-imv_prep_flag   = 0  	 # Run calib on calibrators and print out files for fitting?
+imv_prep_flag   = 1  	 # Run calib on calibrators and print out files for fitting?
 imultiv_flag    = 0      # Run inverse MultiView on data? 
-imv_app_flag    = 1      # apply imv solutions to target?
-imv_imagr_flag  = 1      # image inverse multivew target (calsour) after imv?
+imv_app_flag    = 0      # apply imv solutions to target?
+imv_imagr_flag  = 0      # image inverse multivew target (calsour) after imv?
 #
 rpossm_flag     = 0      # Produce first epoch spectrum?
 ma_sad_flag     = 0      # Run SAD on cube?
@@ -289,25 +289,25 @@ if download_flag==1:
 # check if optional flags are set and overwrite parms if they are
 
 if args.load       ==True:
-    load_flag       = 1 
-    listr_flag      = 1 
+    load_flag       = 1
+    listr_flag      = 1
 if args.geo        ==True:
-    geo_prep_flag   = 1     
-    geo_fringe_flag = 1    
-    doprt_flag      = 1     
-    dofit_flag      = 1  
+    geo_prep_flag   = 1
+    geo_fringe_flag = 1
+    doprt_flag      = 1
+    dofit_flag      = 1
     doplot_flag     = 1
 if args.prepr      ==True:
-    tasav_flag      = 1       
-    restore_su_flag = 1        
-    restore_fg_flag = 1        
-    pr_prep_flag    = 1        
+    tasav_flag      = 1
+    restore_su_flag = 1
+    restore_fg_flag = 1
+    pr_prep_flag    = 1
     apcal_flag      = 1
 if args.mpcal      ==True:
     pr_fringe_flag  = 1
-if args.cvel       ==True:    
-    cvel_flag       = 1       
-if args.mafring    ==True: 
+if args.cvel       ==True:
+    cvel_flag       = 1
+if args.mafring    ==True:
     ma_fringe_flag  = 1
 if args.splitimage ==True:
     split_flag      = 1
