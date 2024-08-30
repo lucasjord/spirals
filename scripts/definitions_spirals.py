@@ -61,11 +61,12 @@
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
 # 2021/11/30 Added run_wa_pang routine - LJH                                 #
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
-# 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                      #
+# 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                   #
+# 2024/08/30 Modified multiview fitting routines - LJH                       #
 #                                                                            #
 ##############################################################################
 
-version_date='2024/08/29'
+version_date='2024/08/30'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -79,6 +80,9 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u, fileinput
 from astropy.time import Time as aTime
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
 import pdb #debugger
 
@@ -4985,8 +4989,6 @@ def _zapbeam(source,inseq=1,disk=1):
     if beam.exists():
         beam.zap()
 
-
-
 # loads files
 def get_file(path):
     #opens and external file and makes it into a list
@@ -5068,11 +5070,39 @@ def make_multiviewcontrol(indata,in2data,centre,mv_window=30.,outfile='multiview
                                                                       (cal[2]-su_cnt[2])*np.cos(su_cnt[3]*np.pi/180.),
                                                                       cal[3]-su_cnt[3])
 
-# python version of sed            
+# python version of sed
 def replace(file, searchExp, replaceExp):
     for line in fileinput.input(file, inplace=1):
         line = line.replace(searchExp, replaceExp)
         sys.stdout.write(line)
+
+class calibrator:
+    def __init__(self,sid,name,x,y,index):
+        self.x     = x    # deg
+        self.y     = y    # deg
+        self.sid   = sid  # source id
+        self.name  = name
+        self.index = index
+
+def load_sn_data(sn_table):
+    ''' Reads in real/imag visibilities from calib/fring'''
+    with open(sn_table) as w: mvtbout = w.readlines()
+    # find start of data
+    head = np.where(np.array(mvtbout) == '***BEGIN*PASS***\n')[0][0]+1
+    data = np.array([s.split() for s in mvtbout[head:-1]])
+    # box for time, antenna, source, real and imag (single pol)
+    box = (1,3,4,12,13)
+    # get first pass visibilities for filtering purposes
+    tmp,tmp,tmp, real0, imag0 = data[:,box].T
+    # construct complex vis
+    vis0 = np.array(real0,dtype=float)+np.array(imag0,dtype=float)*complex(0,1)
+    # INDE's were converted to -999.9, so MAG>1
+    inde = abs(vis0)>2  #finding INDE
+    # filter out INDE entries and make fractional day readable (D->E)
+    fday0, src_num1, ant_num1, real1, imag1 = data[:,box][~inde].T
+    vis1  = np.array(real1,dtype=float)+np.array(imag1,dtype=float)*complex(0,1)
+    fday1 = np.array([s.replace('D','E') for s in fday0],dtype='float')
+    return fday1, src_num1, ant_num1, vis1
 
 # END defs
 ##############################################################################
@@ -5236,10 +5266,16 @@ if 'mvwin' in locals() and globals():pass
 else: mvwin = 30.0
 if 'ant_bls' in locals() and globals(): pass
 else: ant_bls = [0]
+# multiview parms
 if 'imv_prep_flag' in locals() and globals(): pass
 else: imv_prep_flag = 0
 if 'imv_app_flag' in locals() and globals(): pass
 else: imv_app_flag = 0
+if 'mv_prep_flag' in locals() and globals(): pass
+else: mv_prep_flag = 0
+if 'mv_app_flag' in locals() and globals(): pass
+else: mv_app_flag = 0
+#
 if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
 if 'apthree' in locals() and globals(): pass
@@ -6116,20 +6152,307 @@ if fittp_flag==2:
     mprint('########################################################', logfile)
 
 ###########################################################################
+######################      multiview section       #######################
+###########################################################################
 
 cal_split = AIPSUVData(calsource,'UVDATA', cont_data.disk, 1)
 
+if mv_prep_flag==1 and imv_prep_flag==1:
+    sys.exit('Conflict: Cannot run both inverse and normal multiview')
+
+if mv_prep_flag==1:
+    # runs on continuum and line data BEFORE mafring (SN3/CL7)
+    # fringe and plane fit just to quasar data, apply to maser data
+    check_sncl(cont_data, 3, 7,logfile)
+    if line_data2.exists() and line!=cont:
+        linedata = line_data2
+        linedata.clrstat()
+        check_sncl(linedata, 3, 7,logfile)
+        calsource = findcal(linedata, calsource)
+    elif line_data.exists() and line!=cont:
+        linedata = line_data
+        linedata.clrstat()
+        check_sncl(linedata, 3, 7,logfile)
+        calsource = findcal(linedata, calsource)
+    # make multiview directory
+    if not os.path.exists('./multiview'):
+        os.makedirs('./multiview')
+    # delete old cont_data2 file
+    if cont_data2.exists() and line!=cont:
+        cont_data2.zap()
+    elif cont_data2.exists() and line==cont:
+        mprint('########################################################', logfile)
+        mprint('Deleting cont_data2, hope you did not want it',logfile)
+        mprint('########################################################', logfile)
+        cont_data2.zap()
+    # make cont_data2
+    runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
+    # calib quasars
+    runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
+    # print out SN table
+    if os.path.exists('./multiview/multiview.TBOUT'):
+        os.remove('./multiview/multiview.TBOUT')
+    runtbout(cont_data2,'SN',1,'./multiview/multiview.TBOUT')
+    # replace INDE with float
+    replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
+
+    # make template output file for line data
+    if line!=cont:
+        runcalib(linedata,docal=1,snver=4,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=cvelsource)
+    elif line==cont:
+        runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
+    if os.path.exists('./multiview/target.TBOUT'):
+        os.remove('./multiview/target.TBOUT')
+    if line!=cont:
+        runtbout(linedata, 'SN',4,'./multiview/target.TBOUT')
+    elif line==cont:
+        runtbout(cal_split,'SN',1,'./multiview/target.TBOUT')
+    replace('./multiview/target.TBOUT',"'INDE'",'-999.9')
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
+if multiv_flag==1:
+    # Run normal multiview
+    if line_data2.exists() and line!=cont:
+        linedata = line_data2
+        linedata.clrstat()
+        check_sncl(linedata, 3, 7,logfile)
+        calsource = findcal(linedata, calsource)
+        snout = 8
+    elif line!=cont:
+        linedata = line_data
+        linedata.clrstat()
+        check_sncl(linedata, 3, 7,logfile)
+        calsource = findcal(linedata, calsource)
+        snout = 8
+    elif line==cont and cal_split.exists():
+        check_sncl(cal_split,1,1,logfile)
+        snout = 3
+    else:
+        sys.exit('No valid data to run multiview on!')
+    if cont_data2.exists() and line!=cont:
+        check_sncl(cont_data2,1,1,logfile)
+    if not os.path.exists('./multiview'):
+        sys.exit('./multiview directory does not exist. Run with mv_prep_flag first.')
+    #os.chdir('./multiview/')
+    # load in data
+    fday, src_num, ant_num, vis = load_sn_data('multiview/multiview.TBOUT')
+    ants = np.delete(np.unique(ant_num),0) #unique arrays ##WARNING VERY NAUGHTY HARDCODE refant=0
+    sids = np.unique(src_num)
+    # load in sources
+    su_cal = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in cont_data2.table('SU',1)]
+    su_cnt = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in linedata.table('SU',1) if cvelsource[0] in s.source][0] # assuming one
+    quas = {}
+    for i in range(len(su_cal)):
+        cal = su_cal[i]
+        x,y = (cal[2]-su_cnt[2])*np.cos(su_cnt[3]*np.pi/180.),cal[3]-su_cnt[3]
+        quas.update({str(cal[0]):calibrator(cal[0],cal[1],x,y,i)})
+    # make time array for windowing and arrays for solutions (every minute)
+    dt    = mvwin/2.0
+    rtime = np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
+    P,R = {},{}  # time, phase, residuals
+    for sid in sids:
+        R.update({sid:np.ones(shape=rtime.shape)*np.nan})
+    content = []
+    count   = 0
+    # go through antennas
+    for nant in range(len(ants)):
+        print "Fitting antenna {0:}".format(ants[nant])
+        p = []
+        # move through in time
+        for i in range(len(rtime)):
+            #print i
+            # window +/- dt in time
+            low,high=rtime[i]-dt/(24.*60),rtime[i]+dt/(24.*60)
+            indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
+            # now we need to get the x, y and z for this time slice
+            M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
+            if not len(M)<2:
+                # calculate design matrix
+                try: D = inv(M.T * M)*M.T
+                except np.linalg.LinAlgError: continue
+                # get solutions
+                lam_r = D*np.matrix(vis[indx].real).T  # real cent, ra slope, dec slope
+                lam_i = D*np.matrix(vis[indx].imag).T  # imag ... etc
+                # append complex phase
+                z = complex(lam_r[0],lam_i[0])
+                p.append(z)
+                # calculate residuals
+                foo = src_num[indx] #store srcs
+                f_comp  = np.array((M*lam_r)+complex(0,1)*(M*lam_i)).squeeze()  # complex fit
+                f_phas  = np.angle(f_comp)             # fit phase
+                r_phas = f_phas - np.angle(vis[indx]) # residual phase
+                r_phas[r_phas >= np.pi] += -2*np.pi
+                r_phas[r_phas < -np.pi] +=  2*np.pi
+                for j in range(len(foo)):
+                    R[foo[j]][i] = r_phas[j]
+                # increase count
+                count = count+1
+                # append for output file (single pol again)
+                content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
+            else:
+                # append time and null phase (keep solutions the same length)
+                p.append(np.nan)
+        P.update({ants[nant]:p})
+
+    # plot the outputs
+    fig, ax = plt.subplots(len(ants),2,figsize=(4*3,3*(len(ants)-1)))
+    for nant in range(len(ants)):
+        for nsrc in range(len(sids)):
+            indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
+            ax[nant,0].plot(fday1[indx],57.2*np.angle(vis1[indx]),'.')
+            if nant==0: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.',label=quas[sids[nsrc]].name)
+            else: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.')
+        ax[nant,0].plot(T[ants[nant]],57.2*np.angle(P[ants[nant]]),'k.')
+        ax[nant,0].set_ylim(-200,200);
+        ax[nant,1].set_ylim(-200,200);
+        ax[nant,0].set_ylabel('{}-{} phase (deg)'.format(refant,ants[nant]))
+    ax[0,-1].set_xlabel('Time (days)')
+    ax[0,0].set_title('Complex plane fitting');
+    ax[0,1].set_title('Residual phase');
+    ax[0,0].vlines(ymin=-201,ymax=201,x=fday[150]-dt/(24*60),color='r',zorder=1)
+    ax[0,0].vlines(ymin=-201,ymax=201,x=fday[150]+dt/(24*60),color='r',zorder=1);
+    ax[0,0].text(x=fday[138],y=160,s='mv window',size=6,color='r')
+    ax[-1,0].set_xlabel('Time (days)');
+    ax[-1,-1].set_xlabel('Time (days)');
+    fig.legend(bbox_to_anchor=(0.9, 0.8), loc='upper left');
+    fig.savefig('multiview/mv_fitting.pdf',bbox_inches='tight')
+
+    # plot the quasar distribution
+    fig, ax = plt.subplots(1,figsize=(5,5))
+    ax.plot(0,0,'ks',label=cvelsource[0])
+    for s in sids:
+        ax.scatter(quas[s].x,quas[s].y)
+        ax.text(quas[s].x,quas[s].y,s=quas[s].name)
+    ax.grid('True')
+    ax.set_xlabel('EW offset (deg)')
+    ax.set_ylabel('NS offset (deg)')
+    ax.set_aspect('equal')
+    fig.savefig('multiview/quasar_dist.pdf',bbox_inches='tight')
+
+    # get header from target,TBOUT and replace values
+    start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
+    header = get_file('multiview/target.TBOUT')[:start+1]
+    ender  = get_file('multiview/target.TBOUT')[-1]
+    header[4] = 'NAXIS2  ={:>21.0f} / Number of entries in table'.format(count)
+    header[10]= 'EXTVER  ={:>21.0f} / Version Number of table'.format(snout)
+    # print data to target.TBIN as SN4
+    outfile = 'multiview/target.TBIN'
+    if os.path.exists(outfile): os.remove(outfile)
+    outf = open(outfile,'a+')
+    for lin in header:
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    for lin in content:
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    print >> outf, ender
+    outf.close()
+
+    mprint('########################################################', logfile)
+    mprint('MULTV2: Appears to have ended successfully',logfile)
+    mprint('########################################################', logfile)
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
+
+if mv_app_flag==1:
+    if line!=cont:
+        if line_data2.exists():
+            linedata = line_data2
+        else: linedata = line_data
+        linedata.clrstat()
+        check_sncl(linedata, 3, 7,logfile)
+
+        replace('./multiview/target.TBIN','nanE+00',"'INDE'  ")
+        # SN4 + CL7 = CL8
+        runtbin(linedata,'./multiview/target.TBIN')
+        runclcal(linedata,4,7,8,'',1,refant)
+
+    if line==cont:
+        if cal_split.exists():
+            check_sncl(cal_split,1,1,logfile)
+        replace('./multiview/target.TBIN','nanE+00',"'INDE'  ")
+        # SN2 + CL1 = CL2
+        runtbin(cal_split,'./multiview/target.TBIN')
+        runclcal(cal_split,2,1,2,'',1,refant)
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
+if mv_imagr_flag==1:
+    imna1  = '-1MV'
+    imna2  = '-2MV'
+
+    if line!=cont:
+        if line_data2.exists():
+            linedata = line_data2
+        else: linedata = line_data
+        linedata.clrstat()
+        check_sncl(linedata,4,8,logfile)
+
+        mprint('######################',logfile)
+        mprint('Imaging channel: '+str(channel),logfile)
+        mprint('######################',logfile)
+
+        # delete old images
+        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
+            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
+        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
+            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
+        runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna1,
+            uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
+        _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)
+    elif line==cont:
+        if cal_split.exists():
+            cal_split.clrstat()
+            check_sncl(cal_split,3,3,logfile)
+            # delete old images
+            if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
+                AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
+            if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
+                AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
+
+            mprint('######################',logfile)
+            mprint('Imaging source: '+str(calsource),logfile)
+            mprint('######################',logfile)
+
+            if len(calsource)>8:
+                calname = calsource[:8]
+            else:
+                calname = calsource
+
+            runimagr(cal_split,calname,niter,cellsize,imsize,1,imna1,antennas,
+                uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=2)
+            _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1)
+
+    mprint('######################',logfile)
+    mprint(get_time(),logfile)
+    mprint('######################',logfile)
+
+
+
+
+
 if imv_prep_flag==1:
-    
+
     check_sncl(cont_data, 4, 8,logfile)
-    
-    if line_data2.exists() and line!=cont: 
+
+    if line_data2.exists() and line!=cont:
         linedata = line_data2
         linedata.clrstat()
         check_sncl(linedata, 4, 8,logfile)
         calsource = findcal(linedata, calsource) 
     elif line_data.exists() and line!=cont:
-        linedata = line_data   
+        linedata = line_data
         linedata.clrstat()
         check_sncl(linedata, 4, 8,logfile)
         calsource = findcal(linedata, calsource) 
@@ -6141,16 +6464,16 @@ if imv_prep_flag==1:
         multi.indata   = AIPSUVData(calsource,split_outcl,cont_data.disk,1)
         multi.outname  = calsource
         multi.outclass = 'UVDATA'
-    
+
         if cal_split.exists():
             cal_split.clrstat()
             cal_split.zap()
-        multi() 
+        multi()
 
     if not os.path.exists('./multiview'):
         os.makedirs('./multiview')
 
-    if cont_data2.exists() and line!=cont: 
+    if cont_data2.exists() and line!=cont:
         cont_data2.zap()
     elif cont_data2.exists() and line==cont:
         mprint('########################################################', logfile)
@@ -6165,17 +6488,17 @@ if imv_prep_flag==1:
     elif line==cont:
         runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
 
-    if line!=cont: 
+    if line!=cont:
         make_multiviewcontrol(cont_data2,linedata,calsource,mv_window=mvwin)
     elif line==cont:
         make_multiviewcontrol(cont_data2,cont_data,calsource,mv_window=mvwin)
 
-    if os.path.exists('./multiview/multiview.TBOUT'): 
+    if os.path.exists('./multiview/multiview.TBOUT'):
         os.remove('./multiview/multiview.TBOUT')
     runtbout(cont_data2,'SN',1,'./multiview/multiview.TBOUT')
     replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
 
-    if os.path.exists('./multiview/target.TBOUT'): 
+    if os.path.exists('./multiview/target.TBOUT'):
         os.remove('./multiview/target.TBOUT')
 
     if line!=cont:
@@ -6228,7 +6551,7 @@ if imultiv_flag==1:
 
     os.chdir('./multiview/')
 
-    mv_task = os.system(mv_path+'multiview 2>&1 | tee multiview_4x.prt')
+    mv_task = os.system(mv_path+'multiview 2>&1 | tee multiview.prt')
     if mv_task==0:
         mprint('##########################################', logfile)
         mprint('MULTV1: Appears to have ended successfully',logfile)
@@ -6427,10 +6750,6 @@ if imultiv_flag==1:
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
-
-    mprint('##########################################', logfile)
-    mprint('MULTV2: Appears to have ended successfully',logfile)
-    mprint('##########################################', logfile)
 
 if imv_app_flag==1:
     if line!=cont:
