@@ -6272,7 +6272,9 @@ if multiv_flag==1:
             if not len(M)<2:
                 # calculate design matrix
                 try: D = inv(M.T * M)*M.T
-                except np.linalg.LinAlgError: continue
+                except np.linalg.LinAlgError: 
+                    p.append(np.nan)
+                    continue
                 # get solutions
                 lam_r = D*np.matrix(vis[indx].real).T  # real cent, ra slope, dec slope
                 lam_i = D*np.matrix(vis[indx].imag).T  # imag ... etc
@@ -6303,10 +6305,10 @@ if multiv_flag==1:
     for nant in range(len(ants)):
         for nsrc in range(len(sids)):
             indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
-            ax[nant,0].plot(fday1[indx],57.2*np.angle(vis1[indx]),'.')
+            ax[nant,0].plot(fday[indx],57.2*np.angle(vis[indx]),'.')
             if nant==0: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.',label=quas[sids[nsrc]].name)
             else: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.')
-        ax[nant,0].plot(T[ants[nant]],57.2*np.angle(P[ants[nant]]),'k.')
+        ax[nant,0].plot(rtime,57.2*np.angle(P[ants[nant]]),'k.')
         ax[nant,0].set_ylim(-200,200);
         ax[nant,1].set_ylim(-200,200);
         ax[nant,0].set_ylabel('{}-{} phase (deg)'.format(refant,ants[nant]))
