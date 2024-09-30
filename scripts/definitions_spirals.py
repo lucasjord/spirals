@@ -2513,6 +2513,7 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
     fringe.bchan      = 0
     fringe.echan      = 0
     fringe.aparm[1:]  =[2,0]
+    fringe.aparm[7]   = 3
     fringe.dparm[2]   = 250
     fringe.dparm[3]   = 50
     fringe.dparm[4]   = dpfour
@@ -5262,6 +5263,10 @@ if 'imultiv_flag' in locals() and globals(): pass
 else: imultiv_flag = 0
 if 'imv_imagr_flag' in locals() and globals(): pass
 else: imv_imagr_flag = 0
+if 'multiv_flag' in locals() and globals(): pass
+else: multiv_flag = 0
+if 'mv_imagr_flag' in locals() and globals(): pass
+else: mv_imagr_flag = 0
 if 'mvwin' in locals() and globals():pass
 else: mvwin = 30.0
 if 'ant_bls' in locals() and globals(): pass
@@ -6321,7 +6326,7 @@ if multiv_flag==1:
     ax[-1,0].set_xlabel('Time (days)');
     ax[-1,-1].set_xlabel('Time (days)');
     fig.legend(bbox_to_anchor=(0.9, 0.8), loc='upper left');
-    fig.savefig('multiview/mv_fitting.pdf',bbox_inches='tight')
+    fig.savefig('multiview/mv_fitting.pdf')
 
     # plot the quasar distribution
     fig, ax = plt.subplots(1,figsize=(5,5))
@@ -6357,7 +6362,7 @@ if multiv_flag==1:
     outf.close()
 
     mprint('########################################################', logfile)
-    mprint('MULTV2: Appears to have ended successfully',logfile)
+    mprint('MULTV1: Appears to have ended successfully',logfile)
     mprint('########################################################', logfile)
 
     mprint('######################',logfile)
@@ -6406,10 +6411,10 @@ if mv_imagr_flag==1:
         mprint('######################',logfile)
 
         # delete old images
-        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
-            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
-            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
+#        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
+#            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
+#        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
+#            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
         runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna1,
             uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
         _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)
