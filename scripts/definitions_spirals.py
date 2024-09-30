@@ -5280,6 +5280,8 @@ if 'mv_prep_flag' in locals() and globals(): pass
 else: mv_prep_flag = 0
 if 'mv_app_flag' in locals() and globals(): pass
 else: mv_app_flag = 0
+if 'cheeky' in locals() and globals(): pass
+else: cheeky = False
 #
 if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
@@ -6272,25 +6274,13 @@ if multiv_flag==1:
             # window +/- dt in time
             low,high=rtime[i]-dt/(24.*60),rtime[i]+dt/(24.*60)
             indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
-            # now we need to get the x, y and z for this time slice
-            M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
-            if not len(M)<2:
-                # calculate design matrix
-                try: D = inv(M.T * M)*M.T
-                except np.linalg.LinAlgError: 
-                    p.append(np.nan)
-                    continue
-                # get solutions
-                lam_r = D*np.matrix(vis[indx].real).T  # real cent, ra slope, dec slope
-                lam_i = D*np.matrix(vis[indx].imag).T  # imag ... etc
-                # append complex phase
-                z = complex(lam_r[0],lam_i[0])
+            foo = src_num[indx] #store srcs
+            if cheeky==True:
+                # we gonna be cheeky and just average them! Ha!
+                z = np.angle(complex(vis[indx].real.mean(),vis[indx].imag.mean()))
                 p.append(z)
                 # calculate residuals
-                foo = src_num[indx] #store srcs
-                f_comp  = np.array((M*lam_r)+complex(0,1)*(M*lam_i)).squeeze()  # complex fit
-                f_phas  = np.angle(f_comp)             # fit phase
-                r_phas = f_phas - np.angle(vis[indx]) # residual phase
+                r_phase = np.angle(vis[indx]) - z
                 r_phas[r_phas >= np.pi] += -2*np.pi
                 r_phas[r_phas < -np.pi] +=  2*np.pi
                 for j in range(len(foo)):
@@ -6299,11 +6289,39 @@ if multiv_flag==1:
                 count = count+1
                 # append for output file (single pol again)
                 content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
+                    count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
             else:
-                # append time and null phase (keep solutions the same length)
-                p.append(np.nan)
-        P.update({ants[nant]:p})
+                # now we need to get the x, y and z for this time slice
+                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
+                if not len(M)<2:
+                    # calculate design matrix
+                    try: D = inv(M.T * M)*M.T
+                    except np.linalg.LinAlgError: 
+                        p.append(np.nan)
+                        continue
+                    # get solutions
+                    lam_r = D*np.matrix(vis[indx].real).T  # real cent, ra slope, dec slope
+                    lam_i = D*np.matrix(vis[indx].imag).T  # imag ... etc
+                    # append complex phase
+                    z = complex(lam_r[0],lam_i[0])
+                    # calculate residuals
+                    f_comp  = np.array((M*lam_r)+complex(0,1)*(M*lam_i)).squeeze()  # complex fit
+                    f_phas  = np.angle(f_comp)             # fit phase
+                    r_phas = f_phas - np.angle(vis[indx]) # residual phase
+                    r_phas[r_phas >= np.pi] += -2*np.pi
+                    r_phas[r_phas < -np.pi] +=  2*np.pi
+                    for j in range(len(foo)):
+                        R[foo[j]][i] = r_phas[j]
+                    p.append(z)
+                    # increase count
+                    count = count+1
+                    # append for output file (single pol again)
+                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
+                else:
+                    # append time and null phase (keep solutions the same length)
+                    p.append(np.nan)
+            P.update({ants[nant]:p})
 
     # plot the outputs
     fig, ax = plt.subplots(len(ants),2,figsize=(4*3,3*(len(ants)-1)))
@@ -6368,7 +6386,6 @@ if multiv_flag==1:
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
-
 
 if mv_app_flag==1:
     if line!=cont:
@@ -6444,8 +6461,6 @@ if mv_imagr_flag==1:
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
-
-
 
 
 
