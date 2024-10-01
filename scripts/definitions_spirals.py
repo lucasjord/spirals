@@ -85,6 +85,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
 import pdb #debugger
+import copy
 
 if 'aipsver' in locals() and globals(): AIPSTask.version = aipsver
 else: aipsver = AIPSTask.version
@@ -6259,7 +6260,7 @@ if multiv_flag==1:
     # make time array for windowing and arrays for solutions (every minute)
     dt    = mvwin/2.0
     rtime = np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
-    P,R = {},{},[]
+    P,R = {},[]
     for nant in range(len(ants)):
         R.append({})
         for sid in sids:
@@ -6267,27 +6268,33 @@ if multiv_flag==1:
     content = []
     content1= []
     count   = 0
-    countq  = 0
+    count1  = 0
     if cheeky==True:
         # we gonna be cheeky and just average them! Ha! Maybe a little more
         c_mean = np.zeros(shape=(len(rtime),len(ants)))*complex(0,0)
         for i in range(len(rtime)):
             low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
             for nant in range(len(ants)):
-                indx = (ant_num1==ants[nant])*(fday1>=low)*(fday1<=high)
+                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
                 # complex mean
-                c_mean[i,nant] = complex(vis1[indx].real.mean(),vis1[indx].imag.mean())
+                c_mean[i,nant] = complex(vis[indx].real.mean(),vis[indx].imag.mean())
 
         # get the residual
-        rvis = copy.deepcopy(vis1)
-        for i in range(len(vis1)):
+        rvis = copy.deepcopy(vis)*np.nan
+        for i in range(len(vis)):
             # get time stamp for time
-            indx_t = rtime == fday1[i]
+            indx_t = rtime == fday[i]
+            # check if no matches
+            if np.all(~indx_t):
+                continue
+            # make sure not referenace antenna
+            if ant_num[i]==refant:
+                continue
             # get antenna index
-            if ant_num1[i]==refant: continue
-            indx_a = np.where(ants==ant_num1[i])
+            indx_a = np.where(ants==ant_num[i])
             #
-            p = np.angle(vis1[i])-np.angle(c_mean[indx_t,indx_a])    
+#            pdb.set_trace()
+            p = np.angle(vis[i])-np.angle(c_mean[indx_t,indx_a])
             # residual visibility
             rvis[i] = complex(np.cos(p),np.sin(p))
 
@@ -6296,10 +6303,11 @@ if multiv_flag==1:
             t,p,a,b = [],[],[],[]
             for i in range(len(rtime)):
                 low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
-                indx = (ant_num1==ants[nant])*(fday1>=low)*(fday1<=high)
+                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
                 # now we need to get the x, y and z for this time slice
-                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num1[indx]])
-                if not len(M)<2:
+                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
+                # gotta be careful here, might need a rotation matrix or condition for straight line
+                if len(M)>2:
                     # calculate design matrix
                     D = inv(M.T * M)*M.T
                     # get solutions
@@ -6313,18 +6321,20 @@ if multiv_flag==1:
                     f_phas  = np.array((M.dot(lam)).T).squeeze()
                     r_phas = (f_phas - np.angle(rvis[indx])) # residual phase
                     #print(r_phas)
-                    r_phas[r_phas >= np.pi] += -2*np.pi 
+                    r_phas[r_phas >= np.pi] += -2*np.pi
                     r_phas[r_phas < -np.pi] +=  2*np.pi
-                    for j in range(len(src_num1[indx])):
+                    for j in range(len(src_num[indx])):
                         count1 = count1 + 1
-                        R[nant][src_num1[indx][j]][i] = r_phas[j]
+                        R[nant][src_num[indx][j]][i] = r_phas[j]
                         content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,src_num[indx][j],0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
+                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,int(src_num[indx][j]),0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
+                    if np.isnan(lam[0]): continue
                     # increase count
                     count = count+1
+                    pdb.set_trace()
                     # append for output file (single pol again)
-                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
+                    content.append(     '{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1                    ,0,0,0,0,0,np.cos(lam[0])  ,np.sin(lam[0])    ,0,0,1.0,refant))
                 else:
                     # append time and null phase (keep solutions the same length)
                     t.append(rtime[i])
@@ -6361,8 +6371,8 @@ if multiv_flag==1:
                     r_phas = f_phas - np.angle(vis[indx]) # residual phase
                     r_phas[r_phas >= np.pi] += -2*np.pi
                     r_phas[r_phas < -np.pi] +=  2*np.pi
-                    for j in range(len(src_num1[indx])):
-                        R[nant][src_num1[indx][j]][i] = r_phas[j]
+                    for j in range(len(src_num[indx])):
+                        R[nant][src_num[indx][j]][i] = r_phas[j]
                     p.append(z)
                     # increase count
                     count = count+1
