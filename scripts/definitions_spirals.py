@@ -6259,38 +6259,89 @@ if multiv_flag==1:
     # make time array for windowing and arrays for solutions (every minute)
     dt    = mvwin/2.0
     rtime = np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
-    P,R = {},{}  # time, phase, residuals
-    for sid in sids:
-        R.update({sid:np.ones(shape=rtime.shape)*np.nan})
-    content = []
-    count   = 0
-    # go through antennas
+    P,R = {},{},[]
     for nant in range(len(ants)):
-        print "Fitting antenna {0:}".format(ants[nant])
-        p = []
-        # move through in time
+        R.append({})
+        for sid in sids:
+            R[nant].update({sid:np.ones(shape=rtime.shape)*np.nan})
+    content = []
+    content1= []
+    count   = 0
+    countq  = 0
+    if cheeky==True:
+        # we gonna be cheeky and just average them! Ha! Maybe a little more
+        c_mean = np.zeros(shape=(len(rtime),len(ants)))*complex(0,0)
         for i in range(len(rtime)):
-            #print i
-            # window +/- dt in time
-            low,high=rtime[i]-dt/(24.*60),rtime[i]+dt/(24.*60)
-            indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
-            foo = src_num[indx] #store srcs
-            if cheeky==True:
-                # we gonna be cheeky and just average them! Ha!
-                z = np.angle(complex(vis[indx].real.mean(),vis[indx].imag.mean()))
-                p.append(z)
-                # calculate residuals
-                r_phase = np.angle(vis[indx]) - z
-                r_phas[r_phas >= np.pi] += -2*np.pi
-                r_phas[r_phas < -np.pi] +=  2*np.pi
-                for j in range(len(foo)):
-                    R[foo[j]][i] = r_phas[j]
-                # increase count
-                count = count+1
-                # append for output file (single pol again)
-                content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                    count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
-            else:
+            low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
+            for nant in range(len(ants)):
+                indx = (ant_num1==ants[nant])*(fday1>=low)*(fday1<=high)
+                # complex mean
+                c_mean[i,nant] = complex(vis1[indx].real.mean(),vis1[indx].imag.mean())
+
+        # get the residual
+        rvis = copy.deepcopy(vis1)
+        for i in range(len(vis1)):
+            # get time stamp for time
+            indx_t = rtime == fday1[i]
+            # get antenna index
+            if ant_num1[i]==refant: continue
+            indx_a = np.where(ants==ant_num1[i])
+            #
+            p = np.angle(vis1[i])-np.angle(c_mean[indx_t,indx_a])    
+            # residual visibility
+            rvis[i] = complex(np.cos(p),np.sin(p))
+
+        # move along in time and fit plane to residual
+        for nant in range(len(ants)):
+            t,p,a,b = [],[],[],[]
+            for i in range(len(rtime)):
+                low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
+                indx = (ant_num1==ants[nant])*(fday1>=low)*(fday1<=high)
+                # now we need to get the x, y and z for this time slice
+                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num1[indx]])
+                if not len(M)<2:
+                    # calculate design matrix
+                    D = inv(M.T * M)*M.T
+                    # get solutions
+                    lam = D*np.matrix(np.angle(rvis[indx])).T  # centre p, ra slope, dec slope
+                    # append time, phase and slopes
+                    t.append(rtime[i])
+                    p.append(lam[0].tolist()[0][0])
+                    a.append(lam[1])
+                    b.append(lam[2])
+                    # calculate residuals
+                    f_phas  = np.array((M.dot(lam)).T).squeeze()
+                    r_phas = (f_phas - np.angle(rvis[indx])) # residual phase
+                    #print(r_phas)
+                    r_phas[r_phas >= np.pi] += -2*np.pi 
+                    r_phas[r_phas < -np.pi] +=  2*np.pi
+                    for j in range(len(src_num1[indx])):
+                        count1 = count1 + 1
+                        R[nant][src_num1[indx][j]][i] = r_phas[j]
+                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,src_num[indx][j],0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
+                    # increase count
+                    count = count+1
+                    # append for output file (single pol again)
+                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
+                else:
+                    # append time and null phase (keep solutions the same length)
+                    t.append(rtime[i])
+                    p.append(np.nan)
+            P.update({ants[nant]:np.array(p)})
+    else:
+        # go through antennas
+        for nant in range(len(ants)):
+            print "Fitting antenna {0:}".format(ants[nant])
+            p = []
+            # move through in time
+            for i in range(len(rtime)):
+                #print i
+                # window +/- dt in time
+                low,high=rtime[i]-dt/(24.*60),rtime[i]+dt/(24.*60)
+                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
+                foo = src_num[indx] #store srcs
                 # now we need to get the x, y and z for this time slice
                 M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
                 if not len(M)<2:
@@ -6310,8 +6361,8 @@ if multiv_flag==1:
                     r_phas = f_phas - np.angle(vis[indx]) # residual phase
                     r_phas[r_phas >= np.pi] += -2*np.pi
                     r_phas[r_phas < -np.pi] +=  2*np.pi
-                    for j in range(len(foo)):
-                        R[foo[j]][i] = r_phas[j]
+                    for j in range(len(src_num1[indx])):
+                        R[nant][src_num1[indx][j]][i] = r_phas[j]
                     p.append(z)
                     # increase count
                     count = count+1
@@ -6329,8 +6380,8 @@ if multiv_flag==1:
         for nsrc in range(len(sids)):
             indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
             ax[nant,0].plot(fday[indx],57.2*np.angle(vis[indx]),'.')
-            if nant==0: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.',label=quas[sids[nsrc]].name)
-            else: ax[nant,1].plot(rtime,57.2*R[sids[nsrc]],'.')
+            if nant==0: ax[nant,1].plot(rtime,57.2*R[nant][sids[nsrc]],'.',label=quas[sids[nsrc]].name)
+            else: ax[nant,1].plot(rtime,57.2*R[nant][sids[nsrc]],'.')
         ax[nant,0].plot(rtime,57.2*np.angle(P[ants[nant]]),'k.')
         ax[nant,0].set_ylim(-200,200);
         ax[nant,1].set_ylim(-200,200);
@@ -6378,6 +6429,26 @@ if multiv_flag==1:
     outf = open(outfile,'a+')
     print >> outf, ender
     outf.close()
+    # and for quasars too
+    start =  np.where(np.array(get_file('multiview/multiview.TBOUT'))=='***BEGIN*PASS***')[0][0]
+    header = get_file('multiview/multiview.TBOUT')[:start+1]
+    ender  = get_file('multiview/multiview.TBOUT')[-1]
+    header[4] = 'NAXIS2  ={:>21.0f} / Number of entries in table'.format(count1)
+    header[10]= 'EXTVER  ={:>21.0f} / Version Number of table'.format(2)
+    # print data to target.TBIN as SN2
+    outfile = 'multiview/multiview.TBIN'
+    if os.path.exists(outfile): os.remove(outfile)
+    outf = open(outfile,'a+')
+    for lin in header:
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    for lin in content1:
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    print >> outf, ender
+    outf.close()
 
     mprint('########################################################', logfile)
     mprint('MULTV1: Appears to have ended successfully',logfile)
@@ -6399,6 +6470,13 @@ if mv_app_flag==1:
         # SN4 + CL7 = CL8
         runtbin(linedata,'./multiview/target.TBIN')
         runclcal(linedata,4,7,8,'',1,refant)
+        if cheeky==True:
+            check_sncl(cont_data2, 1, 1,logfile)
+
+            replace('./multiview/multiview.TBIN','nanE+00',"'INDE'  ")
+            # SN1 + CL1 = CL2
+            runtbin(cont_data2,'./multiview/multiview.TBIN')
+            runclcal(cont_data2,1,1,2,'',1,refant)            
 
     if line==cont:
         if cal_split.exists():
@@ -6413,8 +6491,7 @@ if mv_app_flag==1:
     mprint('######################',logfile)
 
 if mv_imagr_flag==1:
-    imna1  = '-1MV'
-    imna2  = '-2MV'
+    imna1  = '-MV'
 
     if line!=cont:
         if line_data2.exists():
@@ -6430,11 +6507,15 @@ if mv_imagr_flag==1:
         # delete old images
 #        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
 #            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-#        if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
-#            AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
         runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna1,
             uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
         _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)
+        if cheeky==True:
+            for cal in target:
+                runmaimagr(cont_data2,cal,niter,cellsize,imsize,channel,1,imna1,
+                    uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
+                _zapbeam(cal[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)                
+
     elif line==cont:
         if cal_split.exists():
             cal_split.clrstat()
