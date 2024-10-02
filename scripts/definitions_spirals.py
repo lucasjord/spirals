@@ -86,6 +86,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import pdb #debugger
 import copy
+import numpy as np
 
 if 'aipsver' in locals() and globals(): AIPSTask.version = aipsver
 else: aipsver = AIPSTask.version
@@ -6247,7 +6248,7 @@ if multiv_flag==1:
     #os.chdir('./multiview/')
     # load in data
     fday, src_num, ant_num, vis = load_sn_data('multiview/multiview.TBOUT')
-    ants = np.delete(np.unique(ant_num),0) #unique arrays ##WARNING VERY NAUGHTY HARDCODE refant=0
+    ants = np.unique(ant_num)[~(np.unique(ant_num)==refant)]
     sids = np.unique(src_num)
     # load in sources
     su_cal = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in cont_data2.table('SU',1)]
@@ -6259,7 +6260,7 @@ if multiv_flag==1:
         quas.update({str(cal[0]):calibrator(cal[0],cal[1],x,y,i)})
     # make time array for windowing and arrays for solutions (every minute)
     dt    = mvwin/2.0
-    rtime = np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
+    rtime = np.unique(fday) #np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
     P,R = {},[]
     for nant in range(len(ants)):
         R.append({})
@@ -6280,20 +6281,16 @@ if multiv_flag==1:
                 c_mean[i,nant] = complex(vis[indx].real.mean(),vis[indx].imag.mean())
 
         # get the residual
-        rvis = copy.deepcopy(vis)*np.nan
+        rvis = copy.deepcopy(vis)
         for i in range(len(vis)):
             # get time stamp for time
             indx_t = rtime == fday[i]
-            # check if no matches
-            if np.all(~indx_t):
-                continue
             # make sure not referenace antenna
             if ant_num[i]==refant:
                 continue
             # get antenna index
             indx_a = np.where(ants==ant_num[i])
             #
-#            pdb.set_trace()
             p = np.angle(vis[i])-np.angle(c_mean[indx_t,indx_a])
             # residual visibility
             rvis[i] = complex(np.cos(p),np.sin(p))
@@ -6385,26 +6382,26 @@ if multiv_flag==1:
             P.update({ants[nant]:p})
 
     # plot the outputs
-    fig, ax = plt.subplots(len(ants),2,figsize=(4*3,3*(len(ants)-1)))
+    fig, ax = plt.subplots(len(ants),3,figsize=(4*3,3*(len(ants)-1)))
     for nant in range(len(ants)):
         for nsrc in range(len(sids)):
-            indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
-            ax[nant,0].plot(fday[indx],57.2*np.angle(vis[indx]),'.')
-            if nant==0: ax[nant,1].plot(rtime,57.2*R[nant][sids[nsrc]],'.',label=quas[sids[nsrc]].name)
-            else: ax[nant,1].plot(rtime,57.2*R[nant][sids[nsrc]],'.')
-        ax[nant,0].plot(rtime,57.2*np.angle(P[ants[nant]]),'k.')
-        ax[nant,0].set_ylim(-200,200);
-        ax[nant,1].set_ylim(-200,200);
-        ax[nant,0].set_ylabel('{}-{} phase (deg)'.format(refant,ants[nant]))
-    ax[0,-1].set_xlabel('Time (days)')
-    ax[0,0].set_title('Complex plane fitting');
-    ax[0,1].set_title('Residual phase');
-    ax[0,0].vlines(ymin=-201,ymax=201,x=fday[150]-dt/(24*60),color='r',zorder=1)
-    ax[0,0].vlines(ymin=-201,ymax=201,x=fday[150]+dt/(24*60),color='r',zorder=1);
-    ax[0,0].text(x=fday[138],y=160,s='mv window',size=6,color='r')
-    ax[-1,0].set_xlabel('Time (days)');
-    ax[-1,-1].set_xlabel('Time (days)');
+            indx = (ant_num1==ants[nant])*(src_num1==sids[nsrc])
+            ax[nant,0].plot(24*fday1[indx],57.2*np.angle(vis1[indx]),'.')
+            ax[nant,1].plot(24*fday1[indx],57.2*np.angle(rvis[indx]),'.')
+            if nant==0: 
+                ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.',label=quas[sids[nsrc]].name)
+            else: 
+                ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.')
+        ax[nant,0].plot(24*rtime,57.2*np.angle(c_mean[:,nant]),'k.')
+        ax[nant,1].plot(24*rtime,57.2*P[ants[nant]],'k.')
+
+    ax[0,0].set_title('Complex phase averaging');
+    ax[0,1].set_title('Fit Quasar Residual w/ plane');
+    ax[0,2].set_title('Plane Residuals at quasar pos');
+    ax[-1,0].set_xlabel('Time (hours)');
     fig.legend(bbox_to_anchor=(0.9, 0.8), loc='upper left');
+    for AX in ax.flatten():
+        AX.set_ylim(-200,200)
     fig.savefig('multiview/mv_fitting.pdf')
 
     # plot the quasar distribution
