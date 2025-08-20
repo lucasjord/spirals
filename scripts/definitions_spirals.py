@@ -6248,7 +6248,7 @@ if multiv_flag==1:
     #os.chdir('./multiview/')
     # load in data
     fday, src_num, ant_num, vis = load_sn_data('multiview/multiview.TBOUT')
-    ants = np.unique(ant_num)[~(np.unique(ant_num)==refant)]
+    ants = np.unique(ant_num)[~(np.unique(ant_num)==str(refant))]
     sids = np.unique(src_num)
     # load in sources
     su_cal = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in cont_data2.table('SU',1)]
@@ -6273,27 +6273,31 @@ if multiv_flag==1:
     if cheeky==True:
         # we gonna be cheeky and just average them! Ha! Maybe a little more
         c_mean = np.zeros(shape=(len(rtime),len(ants)))*complex(0,0)
+        # move along in time
         for i in range(len(rtime)):
+            # make a window
             low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
             for nant in range(len(ants)):
                 indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
                 # complex mean
                 c_mean[i,nant] = complex(vis[indx].real.mean(),vis[indx].imag.mean())
 
-        # get the residual
+        # get the residual from the mean
         rvis = copy.deepcopy(vis)
         for i in range(len(vis)):
             # get time stamp for time
             indx_t = rtime == fday[i]
-            # make sure not referenace antenna
-            if ant_num[i]==refant:
-                continue
+            #if np.all(~indx_t): pdb.set_trace()
+            # make sure not ref antenna
+            if int(ant_num[i])==int(refant): continue
             # get antenna index
             indx_a = np.where(ants==ant_num[i])
-            #
             p = np.angle(vis[i])-np.angle(c_mean[indx_t,indx_a])
             # residual visibility
             rvis[i] = complex(np.cos(p),np.sin(p))
+            #except TypeError:
+            #    pdb.set_trace()
+            #    ''
 
         # move along in time and fit plane to residual
         for nant in range(len(ants)):
@@ -6323,15 +6327,24 @@ if multiv_flag==1:
                     for j in range(len(src_num[indx])):
                         count1 = count1 + 1
                         R[nant][src_num[indx][j]][i] = r_phas[j]
-                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,int(src_num[indx][j]),0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
-                    if np.isnan(lam[0]): continue
+                        pja = np.angle(c_mean[i,nant])+r_phas[j]
+#                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+#                                         count1,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,int(src_num[indx][j]),0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
+                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}'.format(count1,rtime[i]*10.0,'0.663757E-03',int(src_num[indx][j]),int(ants[nant]),1,1,0,0)+
+                                 '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(pja),np.sin(pja),0,0,1.0,refant)+
+                                 '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(pja),np.sin(pja),0,0,1.0,refant))
+
+                    #if np.isnan(lam[0]): continue
                     # increase count
                     count = count+1
-                    pdb.set_trace()
                     # append for output file (single pol again)
-                    content.append(     '{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                                         count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1                    ,0,0,0,0,0,np.cos(lam[0])  ,np.sin(lam[0])    ,0,0,1.0,refant))
+                    # 0:count,  1:time,  2:dtime,  3:SID,   4:ANT,   5:SUBA, 6:FREQI, 7:FAR,  8:MODE
+                    # 9:MBDEL1,10:DISP1,11:DDISP1,12:REAL1,13:IMAG1,14:DEL1,15:RATE1,16:WGT1,17:REF1
+                    #18:MBDEL2,19:DISP2,20:DDISP2,21:REAL2,22:IMAG2,23:DEL2,24:RATE2,25:WGT2,26:REF2
+                    p_tot = np.angle(c_mean[i,nant])+p[i]
+                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}'.format(count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0)+
+                             '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(p_tot),np.sin(p_tot),0,0,1.0,refant)+
+                             '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(p_tot),np.sin(p_tot),0,0,1.0,refant))
                 else:
                     # append time and null phase (keep solutions the same length)
                     t.append(rtime[i])
@@ -6385,12 +6398,12 @@ if multiv_flag==1:
     fig, ax = plt.subplots(len(ants),3,figsize=(4*3,3*(len(ants)-1)))
     for nant in range(len(ants)):
         for nsrc in range(len(sids)):
-            indx = (ant_num1==ants[nant])*(src_num1==sids[nsrc])
-            ax[nant,0].plot(24*fday1[indx],57.2*np.angle(vis1[indx]),'.')
-            ax[nant,1].plot(24*fday1[indx],57.2*np.angle(rvis[indx]),'.')
-            if nant==0: 
+            indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
+            ax[nant,0].plot(24*fday[indx],57.2*np.angle(vis[indx]),'.')
+            ax[nant,1].plot(24*fday[indx],57.2*np.angle(rvis[indx]),'.')
+            if nant==0:
                 ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.',label=quas[sids[nsrc]].name)
-            else: 
+            else:
                 ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.')
         ax[nant,0].plot(24*rtime,57.2*np.angle(c_mean[:,nant]),'k.')
         ax[nant,1].plot(24*rtime,57.2*P[ants[nant]],'k.')
@@ -6483,7 +6496,7 @@ if mv_app_flag==1:
             replace('./multiview/multiview.TBIN','nanE+00',"'INDE'  ")
             # SN1 + CL1 = CL2
             runtbin(cont_data2,'./multiview/multiview.TBIN')
-            runclcal(cont_data2,1,1,2,'',1,refant)            
+            runclcal(cont_data2,2,1,2,'',1,refant)            
 
     if line==cont:
         if cal_split.exists():
