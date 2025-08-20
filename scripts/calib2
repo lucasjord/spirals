@@ -1,0 +1,32 @@
+
+  4351  CALIB SOURCES = ''    / All sources selected
+  4352  CALIB QUAL     =   -1 CALCODE =
+  4353  CALIB /TIMERANG = beginning to end
+  4354  CALIB STOKES = 'HALF'  / Stokes type
+  4355  CALIB BIF =   1, EIF =   1  / IF range
+  4356  CALIB BCHAN =1011, ECHAN =1011  / Chan range
+  4357  CALIB SUBARRAY =   0
+  4358  CALIB / no flagging applied
+  4359  CALIB / no continuum calibration applied
+  4360  CALIB / Weights not calibrated
+  4361  CALIB FRQSEL =    1  / FREQID selected
+  4362  CALIB SOLINT   =  144.00 /Soln. inter. (min)
+  4363  CALIB SOLSUB =    1 /Soln. subinterval
+  4364  CALIB SOLMIN =    1 /Minimum soln. int. (min)
+  4365  CALIB APARM(1) =    3 /Min. no antennas
+  4366  CALIB APARM(3) =    1 />0 => avg. RR,LL
+  4367  CALIB APARM(7) =  1.0 /SNR cutoff
+  4368  CALIB SOLTYPE  ='L1R '/Solution type
+  4369  CALIB SOLMODE  ='P   '/Solution mode
+  4370  CALIB WEIGHTIT = 0 / fit wts = wt**1.00
+  4371  CALIB NORMALIZ =   -1 />=1 => Normalize gain
+  4372  CALIB CPARM(7) = 2.500 /limit closure displays
+  4373  CALIB / No calibration applied to input file
+  4374  CALIB SNVER    =    5 /Output SN table version
+  4375  CALIB REFANT   =    1 /Reference antenna
+  4376  CALIB UVRANGE  =    0.000E+00, 1.000E+15 /Min, Max Baseline
+  4377  CALIB ANTENNAS =    0 /All antennas selected
+  4378  CALIB ANTWT    =  1.0 /Weight same for all Ant
+  4379  CALIB CHANSEL(, 1, 1) = 1011, 1011, 1
+  4380  CALIB /Found         2656 good solutions
+  4381  CALIB /Failed on       74 solutions

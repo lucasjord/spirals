@@ -1,0 +1,10 @@
+
+  4316  CALIB N_CALSOUR=    1 / Following Sources included:
+  4317  CALIB CALSOUR  = 'G287.37+0.64    ','                '
+  4325  CALIB GAINUSE  =    8  / CL or SN table used
+  4326  CALIB / Weights calibrated
+  4339  CALIB INGAINUSE=    8 /Input calibrated with CL table
+  4340  CALIB SNVER    =    7 /Output SN table version
+  4341  CALIB REFANT   =    0 /Reference antenna
+  4346  CALIB /Found         1301 good solutions
+  4347  CALIB /Failed on        7 solutions

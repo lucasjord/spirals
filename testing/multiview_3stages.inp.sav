@@ -1,0 +1,36 @@
+!  Inputs for  find_best_overall_turns.f
+!  S006H observed G327.40+0.44
+!  yyyy mm dd    Freq(GHZ)
+   2021 08 13     6.67
+!
+!  #ants  phsrefAnt    2-char codes
+    4        1         CD  HB  KE  WA
+!
+! Target AIPS ID      RA(decimal hrs)    Dec(decimal deg)
+    5                  10.80123           -58.45028
+!
+!  #QSOs      fixed QSO in stage 3    inverse_MV flag (0=false, 1=true)
+    6           1                          0
+! 
+! Src#    QSO name      dX(asec)  dY(asec)   Xerr(mas) Yerr(mas)
+!NotUsed                offsets from target    position error
+  7     J1603-4904     2.15   4.69    0.1     0.1
+  8     J1600-5811     1.61  -4.43    0.1     0.1
+  9     J1542-5838    -0.97  -4.89    0.1     0.1
+ 10     J1515-5559    -5.04  -2.24    0.1     0.1
+ 11     J1534-5351    -2.21  -0.10    0.1     0.1
+ 12     J1549-5235    -0.02   1.17    0.1     0.1
+!
+! Time windows for stages 1 (vector averaging) and  2 (phase drift rates)
+! (eg, 20 means +/-20 min)
+   5     20.0
+!
+!  #grid cells    grid pix(mas)   grid x-center(mas)  grid y-center(mas)
+!  used in stage 3              also used as position offset in simulations 
+        5             1.0               5.0                  3.0
+!
+!  #trial turns used in stage 3 (eg, 5 means +2,+1,0,-1,-2 turns)
+        5
+!	
+! (up to 200) manually entered phase wrap fixes for stage 1...
+!Ant  Source  UT(days)_range   +Turns
