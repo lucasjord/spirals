@@ -6266,12 +6266,13 @@ if multiv_flag==1:
         R.append({})
         for sid in sids:
             R[nant].update({sid:np.ones(shape=rtime.shape)*np.nan})
-    content = []
-    content1= []
+    content = []  # for maser
+    content1= []  # for quasars
     count   = 0
     count1  = 0
     if cheeky==True:
-        # we gonna be cheeky and just average them! Ha! Maybe a little more
+        # we gonna be cheeky and just average them! 
+        # Then we'll also fit a plane to the residuals cos multiview and all that
         c_mean = np.zeros(shape=(len(rtime),len(ants)))*complex(0,0)
         # move along in time
         for i in range(len(rtime)):
@@ -6563,7 +6564,9 @@ if mv_imagr_flag==1:
     mprint(get_time(),logfile)
     mprint('######################',logfile)
 
-
+###########################################################################
+#################       inverse multiview      ############################
+###########################################################################
 
 if imv_prep_flag==1:
 

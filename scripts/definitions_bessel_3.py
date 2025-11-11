@@ -2572,7 +2572,7 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
 
 ##############################################################################
 #
-def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, bpver, dpfour):
+def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, bpver, dpfour,apseven=0):
     fringe             = AIPSTask('FRING')
     if fr_image.exists():
         fringe.in2data = fr_image
@@ -2586,7 +2586,7 @@ def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, 
         mprint('################################################',logfile)
     else:
         mprint('################################################',logfile)
-        mprint('Using point source as imput model for fringe.',logfile)
+        mprint('Using point source as input model for fringe.',logfile)
         mprint('################################################',logfile)
 
     if doband==1:
@@ -2605,13 +2605,13 @@ def fringecal(indata, fr_image, nmaps, refant, calsource,solint,smodel, doband, 
     fringe.solint      = solint
     fringe.aparm[1:]   = [2, 0, 0, 0, 1]
     fringe.dparm[1:]   = [1, 20, 50, 0]
-    fringe.dparm[4]    = dpfour
+    fringe.aparm[7]    = apseven
+    fringe.aparm[4]    = dpfour
     fringe.dparm[8]    = 0
     fringe.nmaps       = nmaps
     fringe.snver       = 0
     fringe.doband      = int(doband)
     fringe.bpver       = int(bpver)
-
     fringe()
 
 ##############################################################################
@@ -3606,14 +3606,14 @@ def runpossm(indata, calsource, refant, tv, doband, bpver):
 
 ##############################################################################
 #
-def run_snplt(indata, inter_flag):
+def run_snplt(indata, inter_flag, inver=4):
 
     indata.zap_table('PL', -1)
     n_ant         = len(get_ant(indata))
     snplt         = AIPSTask('SNPLT')
     snplt.indata  = indata
-    snplt.stokes  = 'RR'
-    snplt.inver   = 4
+    snplt.stokes  = 'HALF'
+    snplt.inver   = inver
     snplt.inext   = 'SN'
     snplt.optype  = 'PHAS'
     snplt.nplots  = n_ant
@@ -3921,7 +3921,7 @@ def run_split(indata, source, outclass, doband, bpver):
         split.doband     = doband
         split.bpver      = bpver
         split.smooth[1:] = smooth
-
+        #split.inp()
         split()
 
 def run_fittp_data(source, outcl, disk,logfile):
@@ -5260,6 +5260,8 @@ if 'do_band_flag' in locals() and globals(): pass
 else: do_band_flag = 0
 if 'dpfour' in locals() and globals(): pass
 else: dpfour = 0
+if 'apseven' in locals() and globals(): pass
+else: apseven = 0
 if 'min_elv' in locals() and globals(): pass
 else: min_elv = 0
 if 'rpossm_flag' in locals() and globals(): pass
@@ -6003,11 +6005,15 @@ if ma_fringe_flag==1 and line != cont:
     mprint('######################',logfile)
 
 if co_fringe_flag==1 and line!=cont:
-
     check_sncl(cont_data, 3, 7,logfile)
-    fringecal(cont_data,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
-    runclcal(cont_data, 4, 7, 8, '', 1, refant)
-    run_snplt(cont_data, inter_flag)
+    splatcal = AIPSUVData(calsource,'CATMP1',1,1)
+    if splatcal.exists(): 
+        splatcal.clrstat()
+        splatcal.zap()
+    runsplat(cont_data, splatcal, [calsource],'FULL',1) #multi-source split
+    fringecal(splatcal,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    #runclcal(splatcal, 1, 1, 2, '', 1, refant)
+    run_snplt(splatcal, inter_flag, inver=1)
 
     if line_data2.exists():
         line_used=line_data2
@@ -6016,7 +6022,7 @@ if co_fringe_flag==1 and line!=cont:
 
     line_used.clrstat()
     check_sncl(line_used, 3, 7,logfile)
-    runtacop(cont_data, line_used, 'SN', 4, 4, 1)
+    runtacop(splatcal, line_used, 'SN', 1, 4, 1)
     if snflg_flag==1:
         runsnflg(line_used, 4, calsource)
     if min_elv>0:
@@ -6106,13 +6112,13 @@ if split_flag==1:
         check_sncl(cont_data, 4, 8,logfile)
         run_split(cont_data, split_sources+[calsource], split_outcl, doband, bpver)
     else: 
-        check_sncl(cont_data, 4, 8,logfile)
+        #check_sncl(cont_data, 4, 8,logfile)
         run_split(cont_data, split_sources, split_outcl, doband, bpver)
 
     cvelsource = findcvelsource(line_data, cvelsource)
 
     if line_data2.exists() and line!=cont:
-        check_sncl(line_data2, 4, 8,logfile)
+        #check_sncl(line_data2, 4, 8,logfile)
         run_masplit(line_data2, cvelsource, split_outcl, doband, bpver,smooth,channel)
     elif line!=cont:
         check_sncl(line_data, 4, 8,logfile)
