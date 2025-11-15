@@ -513,6 +513,36 @@ def loadindx(filepath,filename,outname,outclass,
     else:
         mprint('No!',logfile)
 
+def appendfgeo(filepath,filename,geo_data,cont_data,logfile):
+    if os.path.exists(filepath+filename): mprint('File exists!',logfile)
+    else: raise RuntimeError('File {} does not exists!'.format(filepath+filename))
+ 
+    if not cont_data.exists(): raise RuntimeError('{} does not exists'.format(cont_data))
+    # get F-sources
+    sources = [s for s in cont_data.sources if 'F' in s]
+    
+    fitld = AIPSTask('FITLD')
+    fitld.datain      = filepath+filename
+    fitld.outdata     = geo_data
+    fitld.sources[1:] = sources
+    fitld.doconcat    = 1
+    fitld.clint       = 1./60.
+    fitld.wtthresh    = 0.45
+
+    data = AIPSUVData(fitld.outname, fitld.outclass,
+                      int(fitld.outdisk), int(fitld.outseq))
+    # append F-sources to geo_data
+    fitld.go()
+
+    uvsort(data)
+
+    data.zap_table('AIPS CL',1)
+    runindxr(data)
+    mprint('#################',logfile)
+    mprint('Data new indexed!',logfile)
+    mprint('#################',logfile)
+
+
 ##############################################################################
 # Select one of the inner VLBA antennas
 #
@@ -1442,7 +1472,7 @@ def fringegeo(indata, refant):
     fringe.solint      = 6
     fringe.weightit    = 3
     fringe.aparm[1:]   = [2, 0, d3, 0, d5, 0, 3]
-    fringe.dparm[1:]   = [1, 40, 100, 0]
+    fringe.dparm[1:]   = [1, 100, 200, 0]
     fringe.dparm[4]    = 0
     fringe.dparm[8]    = 0
     fringe.snver       = 2
@@ -3589,14 +3619,14 @@ def runpossm(indata, calsource, refant, tv, doband, bpver):
 
 ##############################################################################
 #
-def run_snplt(indata, inter_flag):
+def run_snplt(indata, inter_flag, sntab = 4):
 
     indata.zap_table('PL', -1)
     n_ant         = len(get_ant(indata))
     snplt         = AIPSTask('SNPLT')
     snplt.indata  = indata
     snplt.stokes  = 'RR'
-    snplt.inver   = 4
+    snplt.inver   = sntab
     snplt.inext   = 'SN'
     snplt.optype  = 'PHAS'
     snplt.nplots  = n_ant
@@ -3906,6 +3936,13 @@ def run_split(indata, source, outclass, doband, bpver):
         split.smooth[1:] = smooth
 
         split()
+
+def run_multi(indata,outdata):
+    multi = AIPSTask('MULTI')
+    multi.default()
+    multi.indata = indata
+    multi.outdata = outdata
+    multi()
 
 def run_fittp_data(source, outcl, disk,logfile):
     fittp         = AIPSTask('FITTP')
@@ -5010,7 +5047,8 @@ def splitt(old_list):
     return np.array(new_list)
 
 # extra AIPS tasks
-def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',aparm7=0,chan=0,refant=0):
+def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',
+    aparm7=0,chan=0,refant=0,aparm3 = apthree):
     calib             = AIPSTask('CALIB')
     calib.indata      = indata
     calib.docalib     = docal
@@ -5019,7 +5057,7 @@ def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='
     calib.snver       = snver
     calib.solmode     = solmode
     calib.soltype     = soltype
-    calib.aparm[3]    = 1
+    calib.aparm[3]    = aparm3
     calib.aparm[7]    = aparm7
     calib.refant      = refant
     #calib.inp()
@@ -5293,6 +5331,8 @@ if 'use_calib' in locals() and globals(): pass
 else: use_calib=False
 if 'dpeight' in locals() and globals(): pass
 else: dpeight = 0
+if 'append_f2geo' in locals() and globals(): pass
+else: append_f2geo = 0
 
 ##############################################################################
 # Start main script
@@ -5368,6 +5408,10 @@ mprint('##################################',logfile)
 ###########################
 # Data Preparation
 
+if append_f2geo==True:
+    check_sncl(data[geo_data_nr],0,1,logfile)
+    appendfgeo(file_path,filename[cont],data[geo_data_nr],data[cont],logfile)
+
 if geo_data_nr < 0: do_geo_block=0
 else: do_geo_block=1
 
@@ -5401,7 +5445,8 @@ if pr_prep_flag==1 or geo_prep_flag==1:
         get_TEC_new(year,doy-1)
         get_TEC_new(year,doy)
         get_TEC_new(year,doy+1)
-        if num_days==2: get_TEC_new(year,doy+1)
+        if num_days==2: 
+            get_TEC_new(year,doy+2)
     if not os.path.exists(eop_path):
         os.mkdir(eop_path)
     get_eop(eop_path)
@@ -5701,6 +5746,7 @@ for i in pr_data_nr:
     if pr_prep_flag>0:
         runuvflg(pr_data,flagfile[i],logfile)
         check_sncl(pr_data, 0, 1,logfile)
+        num_days=get_num_days(pr_data) # fix for geoblocks ending before 0UT and final FF scan
         if pr_data.header['telescop']=='EVN':
             if pr_prep_flag==1:
                 runTECOR(pr_data,year,doy,num_days,3,TECU_model)
@@ -5970,9 +6016,22 @@ if ma_fringe_flag==1 and line != cont:
 if co_fringe_flag==1 and line!=cont:
 
     check_sncl(cont_data, 3, 7,logfile)
-    fringecal(cont_data,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
-    runclcal(cont_data, 4, 7, 8, '', 1, refant)
-    run_snplt(cont_data, inter_flag)
+    # there should be split here?
+    splitdata = AIPSUVData(calsource,'PRSPLT',1,1)
+    if splitdata.exists(): 
+        splitdata.clrstat()
+        splitdata.zap()
+    run_split(cont_data, [calsource], 'PRSPLT', doband, bpver)
+    multidata = AIPSUVData(calsource,'PRSMLT',1,1)
+    if multidata.exists():
+        multidata.clrstat()
+        multidata.zap()
+    run_multi(splitdata,multidata)
+
+    #fringecal(spltdata,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    #runclcal(cont_data, 4, 7, 8, '', 1, refant)
+    runcalib(multidata,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
+    run_snplt(multidata, inter_flag, sntab = 1)
 
     if line_data2.exists():
         line_used=line_data2
@@ -5981,7 +6040,7 @@ if co_fringe_flag==1 and line!=cont:
 
     line_used.clrstat()
     check_sncl(line_used, 3, 7,logfile)
-    runtacop(cont_data, line_used, 'SN', 4, 4, 1)
+    runtacop(multidata, line_used, 'SN', 1, 4, 1)
     if snflg_flag==1:
         runsnflg(line_used, 4, calsource)
     if min_elv>0:
@@ -6137,7 +6196,7 @@ if grid_flag==1:
 if fittp_flag==1:
 
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
-
+    
     mprint('########################################################', logfile)
     for source in split_sources:
         run_fittp_data(source, split_outcl, defdisk, logfile)

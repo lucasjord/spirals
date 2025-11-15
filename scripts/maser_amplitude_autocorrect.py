@@ -1,4 +1,4 @@
-#!/home/observer/anaconda2/bin/ParselTongue
+#!/usr/bin/env ParselTongue
 
 from AIPSData import AIPSUVData as AUV
 from AIPS import AIPS
