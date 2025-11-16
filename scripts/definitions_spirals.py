@@ -63,10 +63,11 @@
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
 # 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                   #
 # 2024/08/30 Modified multiview fitting routines - LJH                       #
+# 2025/11/16 Fixed bug in co_fringe_flag which caused bad solutions - LJH    #
 #                                                                            #
 ##############################################################################
 
-version_date='2024/08/30'
+version_date='2025/11/16'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -3619,14 +3620,13 @@ def runpossm(indata, calsource, refant, tv, doband, bpver):
 
 ##############################################################################
 #
-def run_snplt(indata, inter_flag, sntab = 4):
-
+def run_snplt(indata, inter_flag, inver=4):
     indata.zap_table('PL', -1)
     n_ant         = len(get_ant(indata))
     snplt         = AIPSTask('SNPLT')
     snplt.indata  = indata
-    snplt.stokes  = 'RR'
-    snplt.inver   = sntab
+    snplt.stokes  = 'HALF'
+    snplt.inver   = inver
     snplt.inext   = 'SN'
     snplt.optype  = 'PHAS'
     snplt.nplots  = n_ant
@@ -6014,38 +6014,37 @@ if ma_fringe_flag==1 and line != cont:
     mprint('######################',logfile)
 
 if co_fringe_flag==1 and line!=cont:
-
     check_sncl(cont_data, 3, 7,logfile)
-    # there should be split here?
-    splitdata = AIPSUVData(calsource,'PRSPLT',1,1)
-    if splitdata.exists(): 
-        splitdata.clrstat()
-        splitdata.zap()
-    run_split(cont_data, [calsource], 'PRSPLT', doband, bpver)
-    multidata = AIPSUVData(calsource,'PRSMLT',1,1)
-    if multidata.exists():
-        multidata.clrstat()
-        multidata.zap()
-    run_multi(splitdata,multidata)
-
-    #fringecal(spltdata,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    # old
+    # runcalib(splatcal,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
+    # fringecal(spltdata,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
     #runclcal(cont_data, 4, 7, 8, '', 1, refant)
-    runcalib(multidata,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
-    run_snplt(multidata, inter_flag, sntab = 1)
+    #run_snplt(cont_data, inter_flag) # plot sn4
 
-    if line_data2.exists():
-        line_used=line_data2
-    else:
-        line_used=line_data
+    # new
+    splatcal = AIPSUVData(calsource,'PRSPLT',1,1)
+    if splatcal.exists(): 
+        splatcal.clrstat()
+        splatcal.zap()
+    runsplat(cont_data, splatcal, [calsource],'FULL',1)    #multi-source split
+    #fringecal(splatcal,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    runcalib(splatcal,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
+    run_snplt(splatcal, inter_flag, inver = 1) # plot sn4
+
+    if line_data2.exists(): line_used=line_data2
+    else: line_used=line_data
 
     line_used.clrstat()
     check_sncl(line_used, 3, 7,logfile)
-    runtacop(multidata, line_used, 'SN', 1, 4, 1)
+    #runtacop(cont_data, line_used, 'SN', 4, 4, 1)
+    runtacop(splatcal, line_used, 'SN', 1, 4, 1)
+    runtacop(splatcal, cont_data, 'SN', 1, 4, 1)
     if snflg_flag==1:
         runsnflg(line_used, 4, calsource)
     if min_elv>0:
         run_elvflag(line_used,min_elv,logfile)
     runclcal(line_used, 4, 7, 8, '', 1, refant)
+    runclcal(cont_data, 4, 7, 8, '', 1, refant)
 
     mprint('######################',logfile)
     mprint(get_time(),logfile)

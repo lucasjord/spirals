@@ -63,6 +63,8 @@
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
 # 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                   #
 # 2024/08/30 Modified multiview fitting routines - LJH                       #
+# 2025/03/26 Ported to python 3 - LJH                                        #
+# 2025/11/16 Fixed bug in co_fringe_flag which caused bad solutions - LJH    #
 #                                                                            #
 ##############################################################################
 
@@ -3607,7 +3609,6 @@ def runpossm(indata, calsource, refant, tv, doband, bpver):
 ##############################################################################
 #
 def run_snplt(indata, inter_flag, inver=4):
-
     indata.zap_table('PL', -1)
     n_ant         = len(get_ant(indata))
     snplt         = AIPSTask('SNPLT')
@@ -6012,6 +6013,7 @@ if co_fringe_flag==1 and line!=cont:
         splatcal.zap()
     runsplat(cont_data, splatcal, [calsource],'FULL',1) #multi-source split
     fringecal(splatcal,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    #fringecal(cont_data,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
     #runclcal(splatcal, 1, 1, 2, '', 1, refant)
     run_snplt(splatcal, inter_flag, inver=1)
 
