@@ -61,13 +61,11 @@
 # 2021/10/03 Added inverse Multiview routines - LJH                          #
 # 2021/11/30 Added run_wa_pang routine - LJH                                 #
 # 2023/03/23 Made vbglu part in mafringe more flexbible - LJH                #
-# 2023/11/16 Added TEC map download for gpsweek>2238 - LJH                   #
-# 2024/08/30 Modified multiview fitting routines - LJH                       #
-# 2025/11/16 Fixed bug in co_fringe_flag which caused bad solutions - LJH    #
+# 2023/05/25 Moved CVEL to before position shifts - LJH
 #                                                                            #
 ##############################################################################
 
-version_date='2025/11/16'
+version_date='2023/05/25'
 
 from AIPS import AIPS
 from AIPSTask import AIPSTask, AIPSList
@@ -81,13 +79,8 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u, fileinput
 from astropy.time import Time as aTime
 
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning) 
-warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
 import pdb #debugger
-import copy
-import numpy as np
 
 if 'aipsver' in locals() and globals(): AIPSTask.version = aipsver
 else: aipsver = AIPSTask.version
@@ -271,17 +264,8 @@ def get_center_freq(indata):
 
 ##############################################################################
 # Download TEC maps
-def utctogpsweek(utc):
-    """ Returns the GPS week 
-    input, utc time as datetime.datetime object"""
-    leapseconds = 27
-    datetimeformat = "%Y-%m-%d %H:%M:%S"
-    epoch = datetime.datetime.strptime("1980-01-06 00:00:00",datetimeformat)
-    tdiff = utc -epoch  + datetime.timedelta(seconds=leapseconds)
-    gpsweek = tdiff.days // 7 
-    return gpsweek
 #
-def get_TEC_old(year,doy,TECU_model):
+def get_TEC(year,doy,TECU_model):
     year=str(year)[2:4]
     if doy<10:
         doy='00'+str(doy)
@@ -289,7 +273,7 @@ def get_TEC_old(year,doy,TECU_model):
         doy='0'+str(doy)
     else:
         doy=str(doy)
-    name  =TECU_model+doy+'0.'+year+'i'
+    name=TECU_model+doy+'0.'+year+'i'
     if os.path.exists(name):
         print 'File already there.'
     else:
@@ -298,29 +282,7 @@ def get_TEC_old(year,doy,TECU_model):
         #os.popen(r'wget -t 30 -O '+name+'.Z '+path+name+'.Z')
         os.popen(r'curl --insecure -O --ftp-ssl '+path+name+'.Z')
         os.popen(r'uncompress -f '+name+'.Z')
-#
-def get_TEC_new(year,doy):
-    year=str(year)[2:4]
-    if doy<10:
-        doy='00'+str(doy)
-    elif doy<100:
-        doy='0'+str(doy)
-    else:
-        doy=str(doy)
-    name  = TECU_model+doy+'0.'+year+'i'
-    name2 = 'JPL0OPSFIN_20{}{}0000_01D_02H_GIM.INX'.format(year,doy)
-    if os.path.exists(name):
-        print 'File already there.'
-    elif os.path.exists(name2):
-        os.popen(r'cp '+name2+' '+name)
-    else:
-        path = 'https://cddis.nasa.gov/archive/gnss/products/ionex/20{0:}/{1:}/'.format(year,doy)
-        #print 'curl -c .urs_cookies -b .urs_cookies -n -L -O '+path+name2+'.gz'
-        os.popen(r'curl -c .urs_cookies -b .urs_cookies -n -L -O '+path+name2+'.gz')
-        os.popen(r'gunzip -f '+name2+'.gz')
-        os.popen(r'cp '+name2+' '+name)
 
-#
 def check_geo(indata):
     nx_table = indata.table('AIPS NX', 0)
     n_block  = 1
@@ -514,36 +476,6 @@ def loadindx(filepath,filename,outname,outclass,
     else:
         mprint('No!',logfile)
 
-def appendfgeo(filepath,filename,geo_data,cont_data,logfile):
-    if os.path.exists(filepath+filename): mprint('File exists!',logfile)
-    else: raise RuntimeError('File {} does not exists!'.format(filepath+filename))
- 
-    if not cont_data.exists(): raise RuntimeError('{} does not exists'.format(cont_data))
-    # get F-sources
-    sources = [s for s in cont_data.sources if 'F' in s]
-    
-    fitld = AIPSTask('FITLD')
-    fitld.datain      = filepath+filename
-    fitld.outdata     = geo_data
-    fitld.sources[1:] = sources
-    fitld.doconcat    = 1
-    fitld.clint       = 1./60.
-    fitld.wtthresh    = 0.45
-
-    data = AIPSUVData(fitld.outname, fitld.outclass,
-                      int(fitld.outdisk), int(fitld.outseq))
-    # append F-sources to geo_data
-    fitld.go()
-
-    uvsort(data)
-
-    data.zap_table('AIPS CL',1)
-    runindxr(data)
-    mprint('#################',logfile)
-    mprint('Data new indexed!',logfile)
-    mprint('#################',logfile)
-
-
 ##############################################################################
 # Select one of the inner VLBA antennas
 #
@@ -615,7 +547,7 @@ def check_sncl(indata,sn,cl,logfile):
             indata.zap_table('AIPS SN', 0)
 
 ##############################################################################
-# something wrong here
+#
 def do_band(indata, bandcal, logfile):
     if bandcal==['']:
         print mprint('No Bandpass calibrator selected.', logfile)
@@ -626,38 +558,13 @@ def do_band(indata, bandcal, logfile):
         while indata.table_highver('AIPS BP')>0:
             indata.zap_table('AIPS BP', 0)
 
-    # find centre channels for normalisation
-    channels = indata.header['naxis'][2]
-    if channels==16:
-        bad=2                     # remove 1 channel from each side
-    elif channels==32:
-        bad=4                     # remove 2 channels from each side
-    elif channels==64:
-        bad=8                     # remove 2 channels from each side
-    elif channels==128:
-        bad=12                     # remove 6 channels from each side
-    elif channels==256:
-        bad=8                     # remove 8 channels from each side
-    elif channels==512:
-        bad=20                    # remove 10 channels from each side
-    elif channels==1024:
-        bad=24                    # remove 12 channels from each side
-    else:
-        bad=0
-
-    [bchan,echan] = [1+bad,channels-bad]
-
     bpass              = AIPSTask('BPASS')
     bpass.indata       = indata
     bpass.calsour[1:]  = bandcal
     bpass.docal        = 1
-    #bpass.bpassprm[4]  =-1
+    bpass.bpassprm[4]  =-1
     bpass.bpassprm[5]  = 0
     bpass.bpassprm[10] = 3
-    bpass.solint       = 5
-    bpass.soltype      = 'L1'
-    bpass.ichansel[1][1:] = [bchan,echan,0,0]
-    #bpass.inp()
     bpass.go()
 
 ##############################################################################
@@ -1305,11 +1212,11 @@ def runprtsn(indata):
 
     # do second polarisation if present
     if len(indata.stokes)>1:
-        prtab.box[1][4] = 18
-        prtab.box[2][1] = 24
-        prtab.box[2][2] = 26
-        prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
-        prtab()
+    	prtab.box[1][4] = 18
+    	prtab.box[2][1] = 24
+    	prtab.box[2][2] = 26
+    	prtab.outprint='PWD:'+namma+'_RATE_MDEL_2.DAT'
+    	prtab()
         # now combining the two .DAT files
         n_lines = int(list(os.popen("wc -l "+namma+"_RATE_MDEL_2.DAT | cut -d ' ' -f 1".format()))[0])-22
         os.system("tail -{1:} {0:}_RATE_MDEL_2.DAT >> {0:}_RATE_MDEL.DAT".format(namma,n_lines))
@@ -1498,7 +1405,7 @@ def fringegeo(indata, refant):
     fringe.solint      = 6
     fringe.weightit    = 3
     fringe.aparm[1:]   = [2, 0, d3, 0, d5, 0, 3]
-    fringe.dparm[1:]   = [1, 100, 200, 0]
+    fringe.dparm[1:]   = [1, 40, 100, 0]
     fringe.dparm[4]    = 0
     fringe.dparm[8]    = 0
     fringe.snver       = 2
@@ -2539,7 +2446,7 @@ def runapcal(indata, tyver, gcver, snver, dofit):
 ##############################################################################
 # runapcal added by Lucas Hyland Nov 2017 for LBA
 def runapcal_lba(indata, snver, inver, outver):
-    sqrtsefd        = {'AT': 9.48, 'CD': 21.2, 'HH': 22.36, 'HO': 31.6, 'MP': 25.10,
+    sqrtsefd        = {'AT': 9.48, 'CD': 28.3, 'HH': 22.36, 'HO': 31.6, 'MP': 25.10,
                        'PA': 7.42, 'WA': 25.5, 'KE': 54.77, 'YG': 60.0, 'HB': 54.77}
     ant             = get_ant(indata)
     check_sncl(indata, snver, inver, logfile)
@@ -2557,6 +2464,7 @@ def runapcal_lba(indata, snver, inver, outver):
 ##############################################################################
 #
 def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
+
     if mp_source == ['']:
         mp_source = []
         for source in indata.sources:
@@ -2570,14 +2478,15 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
     fringe.bchan      = 0
     fringe.echan      = 0
     fringe.aparm[1:]  =[2,0]
-    fringe.aparm[7]   = 3
-    fringe.dparm[2]   = 400
-    fringe.dparm[3]   = 50
+    fringe.dparm[2]   = 250
+#    fringe.dparm[3]   = 50
+    fringe.dparm[3]   = -1
     fringe.dparm[4]   = dpfour
+#    fringe.dparm[8]   = 1
     fringe.dparm[8]   = 1
     fringe.snver      = 0
     fringe.calso[1:]  = mp_source
-    #fringe.inputs()
+#    fringe.inputs()
     if mp_timera==0:
         fringe.timer[1:]=[0]
         fringe()
@@ -2593,6 +2502,7 @@ def man_pcal(indata, refant, mp_source, mp_timera, debug, logfile, dpfour):
     fringe.calsour[1]  = source
     fringe.timerang[1:] = timerange
     fringe()
+
     sn=indata.table('AIPS SN', 0)
     mprint('###########################################',logfile)
     mprint('Found solutions for '+str(len(sn))+' of '
@@ -2950,68 +2860,36 @@ def mafringe(indata, fr_image, calsource, channel, refant, outdisk,
     indxr.indata    = vbgludata
     indxr()
 
-    # either choose calib or fringe
-    if use_calib==False:
-        # running fring on the output data
-        fringe               = AIPSTask('FRING')
+    # running fring on the output data
+    fringe               = AIPSTask('FRING')
 
-        if fr_image.exists():
-            fringe.in2data = fr_image
-            mprint('################################################',logfile)
-            mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on diks '+str(int(fringe.in2disk)), logfile)
-            mprint('################################################',logfile)
-        else:
-            mprint('################################################',logfile)
-            mprint('Using point source as imput model for fringe.',logfile)
-            mprint('################################################',logfile)
-
-        # run fringe on maser channel data for line
-        fringe.indata        = multidata
-        fringe.refant        = refant
-        fringe.docal         = 1
-        fringe.calsour[1]    = ''
-        fringe.solint        = 6
-        fringe.aparm[1:]     = [2, 0]
-        fringe.aparm[3]      = apthree
-        fringe.aparm[7]      = 2
-        fringe.dparm[1:]     = [1, -1, 0, 0]
-        fringe.dparm[4]      = dpfour
-        fringe.dparm[8]      = dpeight
-        fringe.snver         = 0
-        fringe()
-        # run fringe on vbglu data for cont
-        fringe.indata        = vbgludata
-        fringe()
+    if fr_image.exists():
+        fringe.in2data = fr_image
+        mprint('################################################',logfile)
+        mprint('Using input model '+fringe.in2name+'.'+fringe.in2class+'.'+str(int(fringe.in2seq))+' on diks '+str(int(fringe.in2disk)), logfile)
+        mprint('################################################',logfile)
     else:
-        # running fring on the output data
-        calib               = AIPSTask('calib')
-        if fr_image.exists():
-            calib.in2data = fr_image
-            mprint('################################################',logfile)
-            mprint('Using input model '+calib.in2name+'.'+calib.in2class+'.'+str(int(calib.in2seq))+' on diks '+str(int(calib.in2disk)), logfile)
-            mprint('################################################',logfile)
-        else:
-            mprint('################################################',logfile)
-            mprint('Using point source as imput model for calib.',logfile)
-            mprint('################################################',logfile)
+        mprint('################################################',logfile)
+        mprint('Using point source as imput model for fringe.',logfile)
+        mprint('################################################',logfile)
 
-        # run fringe on maser channel data for line
-        calib.indata        = multidata
-        calib.refant        = refant
-        calib.docal         = 1
-        calib.calsour[1]    = ''
-        calib.solmode       = 'P'
-        calib.soltype       = 'L1R'
-        calib.solint        = 6
-        calib.snver         = 0
-        calib.aparm[1:]     = [2, 0]
-        calib.aparm[3]      = apthree
-        calib.aparm[7]      = 3
-        calib()
+    # run fringe on maser channel data for line
+    fringe.indata        = multidata
+    fringe.refant        = refant
+    fringe.docal         = 1
+    fringe.calsour[1]    = ''
+    fringe.solint        = 6
+    fringe.aparm[1:]     = [2, 0]
+    fringe.aparm[3]      = apthree
+    fringe.aparm[7]      = 2
+    fringe.dparm[1:]     = [1, -1, 0, 0]
+    fringe.dparm[4]      = dpfour
+    fringe.snver         = 0
+    fringe()
 
-        # run fringe on vbglu data for cont
-        calib.indata        = vbgludata
-        calib()
+    # run fringe on vbglu data for cont
+    fringe.indata        = vbgludata
+    fringe()
 
     return multidata, vbgludata
 
@@ -3040,7 +2918,6 @@ def mafringe2(indata, calsour, channel, refant, outdiks, doband, bpver, dpfour):
     fringe.solint        = 6
     fringe.aparm[1:]     = [2, 0, 1, 0, 0]
     fringe.dparm[1:]     = [1, -1, 0, 0]
-    fringe.dparm[8]      = dpeight
     fringe.dparm[4]      = dpfour
     fringe.snver         = 4
     fringe.doband        = doband
@@ -3643,13 +3520,14 @@ def runpossm(indata, calsource, refant, tv, doband, bpver):
 
 ##############################################################################
 #
-def run_snplt(indata, inter_flag, inver=4):
+def run_snplt(indata, inter_flag):
+
     indata.zap_table('PL', -1)
     n_ant         = len(get_ant(indata))
     snplt         = AIPSTask('SNPLT')
     snplt.indata  = indata
-    snplt.stokes  = 'HALF'
-    snplt.inver   = inver
+    snplt.stokes  = 'RR'
+    snplt.inver   = 4
     snplt.inext   = 'SN'
     snplt.optype  = 'PHAS'
     snplt.nplots  = n_ant
@@ -3960,13 +3838,6 @@ def run_split(indata, source, outclass, doband, bpver):
 
         split()
 
-def run_multi(indata,outdata):
-    multi = AIPSTask('MULTI')
-    multi.default()
-    multi.indata = indata
-    multi.outdata = outdata
-    multi()
-
 def run_fittp_data(source, outcl, disk,logfile):
     fittp         = AIPSTask('FITTP')
     data          = AIPSUVData(source, outcl, disk, 1)
@@ -4061,9 +3932,8 @@ def run_masplit(indata, source, outclass, doband, bpver, smooth, channel):
         split.aparm[1:]  = [0,0]
         split.aparm[6]   = 1
         split.outdisk    = indata.disk
-        # either way, there should be no bandpass cal here
-        split.doband     = -1
-        split.bpver      = 0
+        split.doband     = doband
+        split.bpver      = bpver
         split.smooth[1:] = smooth
         split()
 
@@ -5053,6 +4923,8 @@ def _zapbeam(source,inseq=1,disk=1):
     if beam.exists():
         beam.zap()
 
+
+
 # loads files
 def get_file(path):
     #opens and external file and makes it into a list
@@ -5071,21 +4943,18 @@ def splitt(old_list):
     return np.array(new_list)
 
 # extra AIPS tasks
-def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',
-    aparm7=0,chan=0,refant=0,aparm3 = apthree):
+def runcalib(indata,sources=[''],gainuse=0,docal=-1,snver=0,solmode='',soltype='',aparm7=0,chan=0,refant=0):
     calib             = AIPSTask('CALIB')
     calib.indata      = indata
-    calib.docalib     = docal
     calib.calsour[1:] = sources
     calib.gainu       = gainuse
     calib.snver       = snver
     calib.solmode     = solmode
     calib.soltype     = soltype
-    calib.aparm[3]    = aparm3
+    calib.aparm[3]    = 1
     calib.aparm[7]    = aparm7
     calib.refant      = refant
     #calib.inp()
-    calib.ichansel[1] = [None,chan,chan,0]
     calib()
 
 def runsplat(indata,outdata,sources=[''],stokes='HALF',docal=-1):
@@ -5135,39 +5004,11 @@ def make_multiviewcontrol(indata,in2data,centre,mv_window=30.,outfile='multiview
                                                                       (cal[2]-su_cnt[2])*np.cos(su_cnt[3]*np.pi/180.),
                                                                       cal[3]-su_cnt[3])
 
-# python version of sed
+# python version of sed            
 def replace(file, searchExp, replaceExp):
     for line in fileinput.input(file, inplace=1):
         line = line.replace(searchExp, replaceExp)
         sys.stdout.write(line)
-
-class calibrator:
-    def __init__(self,sid,name,x,y,index):
-        self.x     = x    # deg
-        self.y     = y    # deg
-        self.sid   = sid  # source id
-        self.name  = name
-        self.index = index
-
-def load_sn_data(sn_table):
-    ''' Reads in real/imag visibilities from calib/fring'''
-    with open(sn_table) as w: mvtbout = w.readlines()
-    # find start of data
-    head = np.where(np.array(mvtbout) == '***BEGIN*PASS***\n')[0][0]+1
-    data = np.array([s.split() for s in mvtbout[head:-1]])
-    # box for time, antenna, source, real and imag (single pol)
-    box = (1,3,4,12,13)
-    # get first pass visibilities for filtering purposes
-    tmp,tmp,tmp, real0, imag0 = data[:,box].T
-    # construct complex vis
-    vis0 = np.array(real0,dtype=float)+np.array(imag0,dtype=float)*complex(0,1)
-    # INDE's were converted to -999.9, so MAG>1
-    inde = abs(vis0)>2  #finding INDE
-    # filter out INDE entries and make fractional day readable (D->E)
-    fday0, src_num1, ant_num1, real1, imag1 = data[:,box][~inde].T
-    vis1  = np.array(real1,dtype=float)+np.array(imag1,dtype=float)*complex(0,1)
-    fday1 = np.array([s.replace('D','E') for s in fday0],dtype='float')
-    return fday1, src_num1, ant_num1, vis1
 
 # END defs
 ##############################################################################
@@ -5327,38 +5168,19 @@ if 'imultiv_flag' in locals() and globals(): pass
 else: imultiv_flag = 0
 if 'imv_imagr_flag' in locals() and globals(): pass
 else: imv_imagr_flag = 0
-if 'multiv_flag' in locals() and globals(): pass
-else: multiv_flag = 0
-if 'mv_imagr_flag' in locals() and globals(): pass
-else: mv_imagr_flag = 0
 if 'mvwin' in locals() and globals():pass
 else: mvwin = 30.0
 if 'ant_bls' in locals() and globals(): pass
 else: ant_bls = [0]
-# multiview parms
 if 'imv_prep_flag' in locals() and globals(): pass
 else: imv_prep_flag = 0
 if 'imv_app_flag' in locals() and globals(): pass
 else: imv_app_flag = 0
-if 'mv_prep_flag' in locals() and globals(): pass
-else: mv_prep_flag = 0
-if 'mv_app_flag' in locals() and globals(): pass
-else: mv_app_flag = 0
-if 'cheeky' in locals() and globals(): pass
-else: cheeky = False
-#
 if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
 if 'apthree' in locals() and globals(): pass
 else: apthree = 0
-if 'use_calib' in locals() and globals(): pass
-else: use_calib=False
-if 'dpeight' in locals() and globals(): pass
-else: dpeight = 0
-if 'append_f2geo' in locals() and globals(): pass
-else: append_f2geo = 0
-if 'do_ddel_flag' in locals() and globals(): pass
-else: do_ddel_flag = 0
+
 
 ##############################################################################
 # Start main script
@@ -5434,10 +5256,6 @@ mprint('##################################',logfile)
 ###########################
 # Data Preparation
 
-if append_f2geo==True:
-    check_sncl(data[geo_data_nr],0,1,logfile)
-    appendfgeo(file_path,filename[cont],data[geo_data_nr],data[cont],logfile)
-
 if geo_data_nr < 0: do_geo_block=0
 else: do_geo_block=1
 
@@ -5459,23 +5277,15 @@ if pr_prep_flag==1 or geo_prep_flag==1:
     else:
         (year, month, day)=get_observation_year_month_day(data[pr_data_nr[0]])
         num_days=get_num_days(data[pr_data_nr[0]])
+
     doy=get_day_of_year(year, month, day)
-    gpsweek=utctogpsweek(datetime.datetime(year,month,day))
-    if gpsweek<=2238:
-        get_TEC_old(year,doy-1,TECU_model)
-        get_TEC_old(year,doy,TECU_model)
-        get_TEC_old(year,doy+1,TECU_model)
-#        if num_days==2:
-#            get_TEC_old(year,doy+1,TECU_model)
-    else:
-        get_TEC_new(year,doy-1)
-        get_TEC_new(year,doy)
-        get_TEC_new(year,doy+1)
-        if num_days==2: 
-            get_TEC_new(year,doy+2)
+    
+    get_TEC(year,doy,TECU_model)
     if not os.path.exists(eop_path):
         os.mkdir(eop_path)
     get_eop(eop_path)
+
+    if num_days==2: get_TEC(year,doy+1,TECU_model)
 
 mprint('######################',logfile)
 mprint(get_time(),logfile)
@@ -5772,7 +5582,6 @@ for i in pr_data_nr:
     if pr_prep_flag>0:
         runuvflg(pr_data,flagfile[i],logfile)
         check_sncl(pr_data, 0, 1,logfile)
-        num_days=get_num_days(pr_data) # fix for geoblocks ending before 0UT and final FF scan
         if pr_data.header['telescop']=='EVN':
             if pr_prep_flag==1:
                 runTECOR(pr_data,year,doy,num_days,3,TECU_model)
@@ -5799,17 +5608,18 @@ for i in pr_data_nr:
                 ionos_file='IONOS_NAME.FITS'
                 make_name_ionos(geo_data)
                 runionos(pr_data, ionos_file) #CL3 -> 3
-            if 'WA' in pr_data.antennas:
-                mprint('####################################',logfile)
-                mprint('Running WAPANG on '+pr_data.name,logfile)
-                mprint('####################################',logfile)
-                run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
-            else:
-                mprint('########################################',logfile)
-                mprint('NOT running WAPANG on '+pr_data.name,logfile)
-                mprint('########################################',logfile)
-                runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
-            runpang(pr_data) #CL4 -> 4
+            #if 'WA' in pr_data.antennas:
+            #    mprint('####################################',logfile)
+            #    mprint('Running WAPANG on '+pr_data.name,logfile)
+            #    mprint('####################################',logfile)
+            #    run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
+            #else:
+            mprint('########################################',logfile)
+            mprint('NOT running WAPANG on '+pr_data.name,logfile)
+            mprint('########################################',logfile)
+            runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
+            #pdb.set_trace()
+            #runpang(pr_data) #CL4 -> 4
             for source in pos_shift:
                 [ra, dec] = [pos_shift[source][0],pos_shift[source][1]]
                 if not source in pr_data.sources:
@@ -5829,10 +5639,11 @@ for i in pr_data_nr:
             mprint('####################################',logfile)
             mprint('Using no ATMOS.FITS file',logfile)
             mprint('####################################',logfile)
-            if 'WA' in pr_data.antennas: 
-                run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
-            else:
-                runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
+            #if 'WA' in pr_data.antennas: 
+            #    run_wa_pang(pr_data,refant,cl_in=3,cl_out=4) # CL3 ->4
+            #else:
+            #    runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
+            runtacop(pr_data, pr_data, 'CL', 3, 4, 0)
             runpang2(pr_data,cl_in=4,cl_out=4) #CL4 -> 4
             for source in pos_shift:
                 [ra, dec] = [pos_shift[source][0],pos_shift[source][1]]
@@ -5922,21 +5733,16 @@ for i in pr_data_nr:
                 mprint('#############################################',logfile)
                 #sys.exit()
         runclcal(pr_data, 3, 6, 7, '', 1, refant)
-    #
+
     if do_band_flag==1:
         check_sncl(pr_data, 3, 7,logfile)
         do_band(pr_data, bandcal, logfile)
 
 
+# # old cvel section
+
 line_data  = data[line]
 cont_data  = data[cont]
-
-# touch-up delays with F source fringe-fit
-if do_ddel_flag==1:
-    check_sncl(pr_data, 3, 7,logfile)
-
-
-
 line_data2 = AIPSUVData(line_data.name,line_data.klass,line_data.disk,2)
 cont_data2 = AIPSUVData(cont_data.name,cont_data.klass,cont_data.disk,2)
 
@@ -6030,7 +5836,7 @@ if ma_fringe_flag==1 and line != cont:
         outdata.clrstat()
         outdata.zap()
 
-
+    
     runclcal(line_used, 4, 7, 8, '', 1, refant)
     if snflg_flag==1:
         runsnflg(cont_data, 4, calsource)
@@ -6045,37 +5851,25 @@ if ma_fringe_flag==1 and line != cont:
     mprint('######################',logfile)
 
 if co_fringe_flag==1 and line!=cont:
+
     check_sncl(cont_data, 3, 7,logfile)
-    # old
-    # runcalib(splatcal,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
-    # fringecal(spltdata,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
-    #runclcal(cont_data, 4, 7, 8, '', 1, refant)
-    #run_snplt(cont_data, inter_flag) # plot sn4
+    fringecal(cont_data,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
+    runclcal(cont_data, 4, 7, 8, '', 1, refant)
+    run_snplt(cont_data, inter_flag)
 
-    # new
-    splatcal = AIPSUVData(calsource,'PRSPLT',1,1)
-    if splatcal.exists(): 
-        splatcal.clrstat()
-        splatcal.zap()
-    runsplat(cont_data, splatcal, [calsource],'FULL',1)    #multi-source split
-    #fringecal(splatcal,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
-    runcalib(splatcal,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant,aparm3=apthree)
-    run_snplt(splatcal, inter_flag, inver = 1) # plot sn4
-
-    if line_data2.exists(): line_used=line_data2
-    else: line_used=line_data
+    if line_data2.exists():
+        line_used=line_data2
+    else:
+        line_used=line_data
 
     line_used.clrstat()
     check_sncl(line_used, 3, 7,logfile)
-    #runtacop(cont_data, line_used, 'SN', 4, 4, 1)
-    runtacop(splatcal, line_used, 'SN', 1, 4, 1)
-    runtacop(splatcal, cont_data, 'SN', 1, 4, 1)
+    runtacop(cont_data, line_used, 'SN', 4, 4, 1)
     if snflg_flag==1:
         runsnflg(line_used, 4, calsource)
     if min_elv>0:
         run_elvflag(line_used,min_elv,logfile)
     runclcal(line_used, 4, 7, 8, '', 1, refant)
-    runclcal(cont_data, 4, 7, 8, '', 1, refant)
 
     mprint('######################',logfile)
     mprint(get_time(),logfile)
@@ -6120,7 +5914,7 @@ if co_fringe_flag==1 and line==cont:
     # delete infile for struct quasar phases
     if os.path.exists('multiview/struct_phase.inp'):
         os.remove('multiview/struct_phase.inp')
-
+    
     for (i,k) in get_ant(cont_data).items():
         if os.path.exists('multiview/block_{}_unwrapper.inp'.format(k)):
             os.remove('multiview/block_{}_unwrapper.inp'.format(k))
@@ -6226,7 +6020,7 @@ if grid_flag==1:
 if fittp_flag==1:
 
     split_sources=get_split_sources(cont_data, target, cvelsource, calsource)
-    
+
     mprint('########################################################', logfile)
     for source in split_sources:
         run_fittp_data(source, split_outcl, defdisk, logfile)
@@ -6250,424 +6044,20 @@ if fittp_flag==2:
     mprint('########################################################', logfile)
 
 ###########################################################################
-######################      multiview section       #######################
-###########################################################################
 
 cal_split = AIPSUVData(calsource,'UVDATA', cont_data.disk, 1)
 
-if mv_prep_flag==1 and imv_prep_flag==1:
-    sys.exit('Conflict: Cannot run both inverse and normal multiview')
-
-if mv_prep_flag==1:
-    # runs on continuum and line data BEFORE mafring (SN3/CL7)
-    # fringe and plane fit just to quasar data, apply to maser data
-    check_sncl(cont_data, 3, 7,logfile)
-    if line_data2.exists() and line!=cont:
-        linedata = line_data2
-        linedata.clrstat()
-        check_sncl(linedata, 3, 7,logfile)
-        calsource = findcal(linedata, calsource)
-    elif line_data.exists() and line!=cont:
-        linedata = line_data
-        linedata.clrstat()
-        check_sncl(linedata, 3, 7,logfile)
-        calsource = findcal(linedata, calsource)
-    # make multiview directory
-    if not os.path.exists('./multiview'):
-        os.makedirs('./multiview')
-    # delete old cont_data2 file
-    if cont_data2.exists() and line!=cont:
-        cont_data2.zap()
-    elif cont_data2.exists() and line==cont:
-        mprint('########################################################', logfile)
-        mprint('Deleting cont_data2, hope you did not want it',logfile)
-        mprint('########################################################', logfile)
-        cont_data2.zap()
-    # make cont_data2
-    runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
-    # calib quasars
-    runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
-    # print out SN table
-    if os.path.exists('./multiview/multiview.TBOUT'):
-        os.remove('./multiview/multiview.TBOUT')
-    runtbout(cont_data2,'SN',1,'./multiview/multiview.TBOUT')
-    # replace INDE with float
-    replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
-
-    # make template output file for line data
-    if line!=cont:
-        runcalib(linedata,docal=1,snver=4,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=cvelsource)
-    elif line==cont:
-        runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
-    if os.path.exists('./multiview/target.TBOUT'):
-        os.remove('./multiview/target.TBOUT')
-    if line!=cont:
-        runtbout(linedata, 'SN',4,'./multiview/target.TBOUT')
-    elif line==cont:
-        runtbout(cal_split,'SN',1,'./multiview/target.TBOUT')
-    replace('./multiview/target.TBOUT',"'INDE'",'-999.9')
-
-    mprint('######################',logfile)
-    mprint(get_time(),logfile)
-    mprint('######################',logfile)
-
-if multiv_flag==1:
-    # Run normal multiview
-    if line_data2.exists() and line!=cont:
-        linedata = line_data2
-        linedata.clrstat()
-        check_sncl(linedata, 3, 7,logfile)
-        calsource = findcal(linedata, calsource)
-        snout = 8
-    elif line!=cont:
-        linedata = line_data
-        linedata.clrstat()
-        check_sncl(linedata, 3, 7,logfile)
-        calsource = findcal(linedata, calsource)
-        snout = 8
-    elif line==cont and cal_split.exists():
-        check_sncl(cal_split,1,1,logfile)
-        snout = 3
-    else:
-        sys.exit('No valid data to run multiview on!')
-    if cont_data2.exists() and line!=cont:
-        check_sncl(cont_data2,1,1,logfile)
-    if not os.path.exists('./multiview'):
-        sys.exit('./multiview directory does not exist. Run with mv_prep_flag first.')
-    #os.chdir('./multiview/')
-    # load in data
-    fday, src_num, ant_num, vis = load_sn_data('multiview/multiview.TBOUT')
-    ants = np.unique(ant_num)[~(np.unique(ant_num)==str(refant))]
-    sids = np.unique(src_num)
-    # load in sources
-    su_cal = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in cont_data2.table('SU',1)]
-    su_cnt = [[s.id__no, s.source.strip(' '), s.raepo, s.decepo] for s in linedata.table('SU',1) if cvelsource[0] in s.source][0] # assuming one
-    quas = {}
-    for i in range(len(su_cal)):
-        cal = su_cal[i]
-        x,y = (cal[2]-su_cnt[2])*np.cos(su_cnt[3]*np.pi/180.),cal[3]-su_cnt[3]
-        quas.update({str(cal[0]):calibrator(cal[0],cal[1],x,y,i)})
-    # make time array for windowing and arrays for solutions (every minute)
-    dt    = mvwin/2.0
-    rtime = np.unique(fday) #np.arange(fday[0],fday[-1],1.0/(24*60))[1:-1]
-    P,R = {},[]
-    for nant in range(len(ants)):
-        R.append({})
-        for sid in sids:
-            R[nant].update({sid:np.ones(shape=rtime.shape)*np.nan})
-    content = []  # for maser
-    content1= []  # for quasars
-    count   = 0
-    count1  = 0
-    if cheeky==True:
-        # we gonna be cheeky and just average them! 
-        # Then we'll also fit a plane to the residuals cos multiview and all that
-        c_mean = np.zeros(shape=(len(rtime),len(ants)))*complex(0,0)
-        # move along in time
-        for i in range(len(rtime)):
-            # make a window
-            low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
-            for nant in range(len(ants)):
-                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
-                # complex mean
-                c_mean[i,nant] = complex(vis[indx].real.mean(),vis[indx].imag.mean())
-
-        # get the residual from the mean
-        rvis = copy.deepcopy(vis)
-        for i in range(len(vis)):
-            # get time stamp for time
-            indx_t = rtime == fday[i]
-            #if np.all(~indx_t): pdb.set_trace()
-            # make sure not ref antenna
-            if int(ant_num[i])==int(refant): continue
-            # get antenna index
-            indx_a = np.where(ants==ant_num[i])
-            p = np.angle(vis[i])-np.angle(c_mean[indx_t,indx_a])
-            # residual visibility
-            rvis[i] = complex(np.cos(p),np.sin(p))
-            #except TypeError:
-            #    pdb.set_trace()
-            #    ''
-
-        # move along in time and fit plane to residual
-        for nant in range(len(ants)):
-            t,p,a,b = [],[],[],[]
-            for i in range(len(rtime)):
-                low,high=rtime[i]-dt/(24*60),rtime[i]+dt/(24*60)
-                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
-                # now we need to get the x, y and z for this time slice
-                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
-                # gotta be careful here, might need a rotation matrix or condition for straight line
-                if len(M)>2:
-                    # calculate design matrix
-                    D = inv(M.T * M)*M.T
-                    # get solutions
-                    lam = D*np.matrix(np.angle(rvis[indx])).T  # centre p, ra slope, dec slope
-                    # append time, phase and slopes
-                    t.append(rtime[i])
-                    p.append(lam[0].tolist()[0][0])
-                    a.append(lam[1])
-                    b.append(lam[2])
-                    # calculate residuals
-                    f_phas  = np.array((M.dot(lam)).T).squeeze()
-                    r_phas = (f_phas - np.angle(rvis[indx])) # residual phase
-                    #print(r_phas)
-                    r_phas[r_phas >= np.pi] += -2*np.pi
-                    r_phas[r_phas < -np.pi] +=  2*np.pi
-                    for j in range(len(src_num[indx])):
-                        count1 = count1 + 1
-                        R[nant][src_num[indx][j]][i] = r_phas[j]
-                        pja = np.angle(c_mean[i,nant])+r_phas[j]
-#                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-#                                         count1,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,int(src_num[indx][j]),0,0,0,0,0,np.cos(r_phas[j]),np.sin(r_phas[j]),0,0,1.0,refant))
-                        content1.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}'.format(count1,rtime[i]*10.0,'0.663757E-03',int(src_num[indx][j]),int(ants[nant]),1,1,0,0)+
-                                 '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(pja),np.sin(pja),0,0,1.0,refant)+
-                                 '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(pja),np.sin(pja),0,0,1.0,refant))
-
-                    #if np.isnan(lam[0]): continue
-                    # increase count
-                    count = count+1
-                    # append for output file (single pol again)
-                    # 0:count,  1:time,  2:dtime,  3:SID,   4:ANT,   5:SUBA, 6:FREQI, 7:FAR,  8:MODE
-                    # 9:MBDEL1,10:DISP1,11:DDISP1,12:REAL1,13:IMAG1,14:DEL1,15:RATE1,16:WGT1,17:REF1
-                    #18:MBDEL2,19:DISP2,20:DDISP2,21:REAL2,22:IMAG2,23:DEL2,24:RATE2,25:WGT2,26:REF2
-                    p_tot = np.angle(c_mean[i,nant])+p[i]
-                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}'.format(count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0)+
-                             '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(p_tot),np.sin(p_tot),0,0,1.0,refant)+
-                             '{0:>11f}E+00{1:>11f}E+00{2:>11f}E+00{3:>11f}E+00{4:>11f}E+00{5:>11f}E+00{6:>11f}E+00{7:>11f}E+01{8:>11d}'.format(0,0,0,np.cos(p_tot),np.sin(p_tot),0,0,1.0,refant))
-                else:
-                    # append time and null phase (keep solutions the same length)
-                    t.append(rtime[i])
-                    p.append(np.nan)
-            P.update({ants[nant]:np.array(p)})
-    else:
-        # go through antennas
-        for nant in range(len(ants)):
-            print "Fitting antenna {0:}".format(ants[nant])
-            p = []
-            # move through in time
-            for i in range(len(rtime)):
-                #print i
-                # window +/- dt in time
-                low,high=rtime[i]-dt/(24.*60),rtime[i]+dt/(24.*60)
-                indx = (ant_num==ants[nant])*(fday>=low)*(fday<=high)
-                foo = src_num[indx] #store srcs
-                # now we need to get the x, y and z for this time slice
-                M = np.matrix([(1,quas[s].x,quas[s].y) for s in src_num[indx]])
-                if not len(M)<2:
-                    # calculate design matrix
-                    try: D = inv(M.T * M)*M.T
-                    except np.linalg.LinAlgError: 
-                        p.append(np.nan)
-                        continue
-                    # get solutions
-                    lam_r = D*np.matrix(vis[indx].real).T  # real cent, ra slope, dec slope
-                    lam_i = D*np.matrix(vis[indx].imag).T  # imag ... etc
-                    # append complex phase
-                    z = complex(lam_r[0],lam_i[0])
-                    # calculate residuals
-                    f_comp  = np.array((M*lam_r)+complex(0,1)*(M*lam_i)).squeeze()  # complex fit
-                    f_phas  = np.angle(f_comp)             # fit phase
-                    r_phas = f_phas - np.angle(vis[indx]) # residual phase
-                    r_phas[r_phas >= np.pi] += -2*np.pi
-                    r_phas[r_phas < -np.pi] +=  2*np.pi
-                    for j in range(len(src_num[indx])):
-                        R[nant][src_num[indx][j]][i] = r_phas[j]
-                    p.append(z)
-                    # increase count
-                    count = count+1
-                    # append for output file (single pol again)
-                    content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                        count,rtime[i]*10.0,'0.663757E-03',1,int(ants[nant]),1,1,0,0,0,0,0,z.real,z.imag,0,0,1.0,refant))
-                else:
-                    # append time and null phase (keep solutions the same length)
-                    p.append(np.nan)
-            P.update({ants[nant]:p})
-
-    # plot the outputs
-    fig, ax = plt.subplots(len(ants),3,figsize=(4*3,3*(len(ants)-1)))
-    for nant in range(len(ants)):
-        for nsrc in range(len(sids)):
-            indx = (ant_num==ants[nant])*(src_num==sids[nsrc])
-            ax[nant,0].plot(24*fday[indx],57.2*np.angle(vis[indx]),'.')
-            ax[nant,1].plot(24*fday[indx],57.2*np.angle(rvis[indx]),'.')
-            if nant==0:
-                ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.',label=quas[sids[nsrc]].name)
-            else:
-                ax[nant,2].plot(24*rtime,57.2*R[nant][sids[nsrc]],'.')
-        ax[nant,0].plot(24*rtime,57.2*np.angle(c_mean[:,nant]),'k.')
-        ax[nant,1].plot(24*rtime,57.2*P[ants[nant]],'k.')
-
-    ax[0,0].set_title('Complex phase averaging');
-    ax[0,1].set_title('Fit Quasar Residual w/ plane');
-    ax[0,2].set_title('Plane Residuals at quasar pos');
-    ax[-1,0].set_xlabel('Time (hours)');
-    fig.legend(bbox_to_anchor=(0.9, 0.8), loc='upper left');
-    for AX in ax.flatten():
-        AX.set_ylim(-200,200)
-    fig.savefig('multiview/mv_fitting.pdf')
-
-    # plot the quasar distribution
-    fig, ax = plt.subplots(1,figsize=(5,5))
-    ax.plot(0,0,'ks',label=cvelsource[0])
-    for s in sids:
-        ax.scatter(quas[s].x,quas[s].y)
-        ax.text(quas[s].x,quas[s].y,s=quas[s].name)
-    ax.grid('True')
-    ax.set_xlabel('EW offset (deg)')
-    ax.set_ylabel('NS offset (deg)')
-    ax.set_aspect('equal')
-    fig.savefig('multiview/quasar_dist.pdf',bbox_inches='tight')
-
-    # get header from target,TBOUT and replace values
-    start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
-    header = get_file('multiview/target.TBOUT')[:start+1]
-    ender  = get_file('multiview/target.TBOUT')[-1]
-    header[4] = 'NAXIS2  ={:>21.0f} / Number of entries in table'.format(count)
-    header[10]= 'EXTVER  ={:>21.0f} / Version Number of table'.format(snout)
-    # print data to target.TBIN as SN4
-    outfile = 'multiview/target.TBIN'
-    if os.path.exists(outfile): os.remove(outfile)
-    outf = open(outfile,'a+')
-    for lin in header:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    for lin in content:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    print >> outf, ender
-    outf.close()
-    # and for quasars too
-    start =  np.where(np.array(get_file('multiview/multiview.TBOUT'))=='***BEGIN*PASS***')[0][0]
-    header = get_file('multiview/multiview.TBOUT')[:start+1]
-    ender  = get_file('multiview/multiview.TBOUT')[-1]
-    header[4] = 'NAXIS2  ={:>21.0f} / Number of entries in table'.format(count1)
-    header[10]= 'EXTVER  ={:>21.0f} / Version Number of table'.format(2)
-    # print data to target.TBIN as SN2
-    outfile = 'multiview/multiview.TBIN'
-    if os.path.exists(outfile): os.remove(outfile)
-    outf = open(outfile,'a+')
-    for lin in header:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    for lin in content1:
-        print >> outf, lin
-    outf.close()
-    outf = open(outfile,'a+')
-    print >> outf, ender
-    outf.close()
-
-    mprint('########################################################', logfile)
-    mprint('MULTV1: Appears to have ended successfully',logfile)
-    mprint('########################################################', logfile)
-
-    mprint('######################',logfile)
-    mprint(get_time(),logfile)
-    mprint('######################',logfile)
-
-if mv_app_flag==1:
-    if line!=cont:
-        if line_data2.exists():
-            linedata = line_data2
-        else: linedata = line_data
-        linedata.clrstat()
-        check_sncl(linedata, 3, 7,logfile)
-
-        replace('./multiview/target.TBIN','nanE+00',"'INDE'  ")
-        # SN4 + CL7 = CL8
-        runtbin(linedata,'./multiview/target.TBIN')
-        runclcal(linedata,4,7,8,'',1,refant)
-        if cheeky==True:
-            check_sncl(cont_data2, 1, 1,logfile)
-
-            replace('./multiview/multiview.TBIN','nanE+00',"'INDE'  ")
-            # SN1 + CL1 = CL2
-            runtbin(cont_data2,'./multiview/multiview.TBIN')
-            runclcal(cont_data2,2,1,2,'',1,refant)            
-
-    if line==cont:
-        if cal_split.exists():
-            check_sncl(cal_split,1,1,logfile)
-        replace('./multiview/target.TBIN','nanE+00',"'INDE'  ")
-        # SN2 + CL1 = CL2
-        runtbin(cal_split,'./multiview/target.TBIN')
-        runclcal(cal_split,2,1,2,'',1,refant)
-
-    mprint('######################',logfile)
-    mprint(get_time(),logfile)
-    mprint('######################',logfile)
-
-if mv_imagr_flag==1:
-    imna1  = '-MV'
-
-    if line!=cont:
-        if line_data2.exists():
-            linedata = line_data2
-        else: linedata = line_data
-        linedata.clrstat()
-        check_sncl(linedata,4,8,logfile)
-
-        mprint('######################',logfile)
-        mprint('Imaging channel: '+str(channel),logfile)
-        mprint('######################',logfile)
-
-        # delete old images
-#        if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
-#            AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-        runmaimagr(linedata,calsource,niter,cellsize,imsize,channel,1,imna1,
-            uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
-        _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)
-        if cheeky==True:
-            for cal in target:
-                runmaimagr(cont_data2,cal,niter,cellsize,imsize,channel,1,imna1,
-                    uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=0)
-                _zapbeam(cal[:11-len(imna1)]+imna1,inseq=1,disk=defdisk)                
-
-    elif line==cont:
-        if cal_split.exists():
-            cal_split.clrstat()
-            check_sncl(cal_split,3,3,logfile)
-            # delete old images
-            if AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).exists():
-                AIPSImage(calsource[:11-len(imna1)]+imna1,'ICL001',defdisk,1).zap()
-            if AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).exists():
-                AIPSImage(calsource[:11-len(imna2)]+imna2,'ICL001',defdisk,1).zap()
-
-            mprint('######################',logfile)
-            mprint('Imaging source: '+str(calsource),logfile)
-            mprint('######################',logfile)
-
-            if len(calsource)>8:
-                calname = calsource[:8]
-            else:
-                calname = calsource
-
-            runimagr(cal_split,calname,niter,cellsize,imsize,1,imna1,antennas,
-                uvwtfn,robust,beam,baselines=ant_bls,timer=imgr_timer,gainu=2)
-            _zapbeam(calsource[:11-len(imna1)]+imna1,inseq=1)
-
-    mprint('######################',logfile)
-    mprint(get_time(),logfile)
-    mprint('######################',logfile)
-
-###########################################################################
-#################       inverse multiview      ############################
-###########################################################################
-
 if imv_prep_flag==1:
-
+    
     check_sncl(cont_data, 4, 8,logfile)
-
-    if line_data2.exists() and line!=cont:
+    
+    if line_data2.exists() and line!=cont: 
         linedata = line_data2
         linedata.clrstat()
         check_sncl(linedata, 4, 8,logfile)
         calsource = findcal(linedata, calsource) 
     elif line_data.exists() and line!=cont:
-        linedata = line_data
+        linedata = line_data   
         linedata.clrstat()
         check_sncl(linedata, 4, 8,logfile)
         calsource = findcal(linedata, calsource) 
@@ -6679,16 +6069,16 @@ if imv_prep_flag==1:
         multi.indata   = AIPSUVData(calsource,split_outcl,cont_data.disk,1)
         multi.outname  = calsource
         multi.outclass = 'UVDATA'
-
+    
         if cal_split.exists():
             cal_split.clrstat()
             cal_split.zap()
-        multi()
+        multi() 
 
     if not os.path.exists('./multiview'):
         os.makedirs('./multiview')
 
-    if cont_data2.exists() and line!=cont:
+    if cont_data2.exists() and line!=cont: 
         cont_data2.zap()
     elif cont_data2.exists() and line==cont:
         mprint('########################################################', logfile)
@@ -6697,23 +6087,24 @@ if imv_prep_flag==1:
         cont_data2.zap()
 
     runsplat(cont_data,cont_data2,sources=target,stokes='I',docal=1)
+
     runcalib(cont_data2,docal=1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
     if line!=cont:
-        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant,sources=cvelsource)
+        runcalib(linedata,docal=1,snver=5,solmode='P',soltype='L1R',aparm7=1,chan=channel,refant=refant)
     elif line==cont:
         runcalib(cal_split,docal=-1,snver=1,solmode='P',soltype='L1R',aparm7=1,refant=refant)
 
-    if line!=cont:
+    if line!=cont: 
         make_multiviewcontrol(cont_data2,linedata,calsource,mv_window=mvwin)
     elif line==cont:
         make_multiviewcontrol(cont_data2,cont_data,calsource,mv_window=mvwin)
 
-    if os.path.exists('./multiview/multiview.TBOUT'):
+    if os.path.exists('./multiview/multiview.TBOUT'): 
         os.remove('./multiview/multiview.TBOUT')
     runtbout(cont_data2,'SN',1,'./multiview/multiview.TBOUT')
     replace('./multiview/multiview.TBOUT',"'INDE'",'-999.9')
 
-    if os.path.exists('./multiview/target.TBOUT'):
+    if os.path.exists('./multiview/target.TBOUT'): 
         os.remove('./multiview/target.TBOUT')
 
     if line!=cont:
@@ -6766,13 +6157,13 @@ if imultiv_flag==1:
 
     os.chdir('./multiview/')
 
-    mv_task = os.system(mv_path+'multiview 2>&1 | tee multiview.prt')
+    mv_task = os.system(mv_path+'multiview_4x 2>&1 | tee multiview_4x.prt')
     if mv_task==0:
         mprint('##########################################', logfile)
         mprint('MULTV1: Appears to have ended successfully',logfile)
         mprint('##########################################', logfile)
 
-    else:
+    else: 
         print 'MUTLV1: Purports to die of UNNATURAL causes'
         print 'Please check input files in ./multiview/'
         raise ValueError
@@ -6792,15 +6183,14 @@ if imultiv_flag==1:
     xy     = np.matrix(splitt(get_file('multiview/multiview_control.inp')[9:])[:,(0,2,3)].astype(float))
     x      = xy[:,1]; y = xy[:,2]; xy[:,0] = 1
     m      = np.ones(shape=(Nquas,3))
-    m[:,1] = np.array(x).reshape(Nquas)
-    m[:,2] = np.array(y).reshape(Nquas)
-    M      = np.matrix(m);
-    #pdb.set_trace()
-    if Nquas>=3:
-        D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
+    m[:,1] = np.array(x).reshape(Nquas) 
+    m[:,2] = np.array(y).reshape(Nquas) 
+    M      = np.matrix(m); 
+    D      = inv(M.T * M)*M.T #design matrix/correlations matrix?
+    #
     count  = 0 #start data count at zero
     for n in ants.keys():
-        # use the outprint of the fortran programme as it has already done the work
+        # use the outprint of the fortran programme as it has already done the work 
         z = splitt(get_file('multiview/fort.1{}'.format(n))[2:]).astype(float)  # qso data
         f = splitt(get_file('multiview/fort.20{}'.format(n))[1:]).astype(float) # mark fit
         #
@@ -6813,7 +6203,7 @@ if imultiv_flag==1:
         qstruct    = np.zeros(shape=(len(t),Nquas))
         #
 
-        ''' new unwrapping technique
+        ''' new unwrapping technique 
 
         old way was just to use numpy.diff logic to find large jumps moving forward in time.
         However, since early times might be low elevation, this often might cause the phase to be unwrapped
@@ -6868,7 +6258,7 @@ if imultiv_flag==1:
                         p2[int(1+nboundaryindx[nb]):,j][i+1] = p[int(1+nboundaryindx[nb]):,j][i+1] + dp
 
         correction = correction + (p2 - p) # add in corrections
-        ##
+        ## 
         # make empty antenna-block-quasar file if it doesn't exist for user defined offsets
         # this file will be deleted at the fringe check stage and not overwritten here
         if not os.path.exists('multiview/block_{}_unwrapper.inp'.format(ants[n])):
@@ -6895,17 +6285,16 @@ if imultiv_flag==1:
         qstruct     = qstruct    + quas_str_phase[n-1,:]     # add user--defined quasar structure phase (not really used [yet?])
         # store unwrapped input data
         P.append(p+correction+qstruct)
-        #
+        
         # solve matrix equation
-        if Nquas>=3:
-            lam  = np.array(D*(p+correction+qstruct).T)
-            Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
-            lam[0][np.nanmean(abs(Res),axis=1)>60]=None #'flag' data with too high residuals
-            # store parms
-            L.append(lam)
-        if not n==refant and Nquas>=3:
+        lam  = np.array(D*(p+correction+qstruct).T)
+        Res  = np.array(np.array(p+correction+qstruct)-(lam[0] + x*lam[1] + y*lam[2] + np.multiply(0,y)*lam[2]).T)
+        lam[0][np.nanmean(abs(Res),axis=1)>60]=None #'flag' data with too high residuals
+        # store parms
+        L.append(lam)
+        if not n==refant:
             #mprint('Plotting antenna '+ants[n],logfile)
-            #
+
             fig, ax = plt.subplots(3,1,figsize=(10,14))
             # plot corrected phases
             ax[0].plot(t*24,p+correction+qstruct,'.');
@@ -6924,17 +6313,17 @@ if imultiv_flag==1:
             ax[2].legend([R'EW Slope',R'NS Slope'])
             ax[2].set_ylabel(R'Phase slope (deg/deg)')
             ax[2].set_xlabel(R'Time UTC (hr)')
-            #
+            # 
             ax[0].set_title('{}--{}'.format(ants[n],ants[refant]));
             fig.savefig('multiview/imv_fit_{}-{}-{}-{}.pdf'.format(cont_data.name,calsource,ants[n],ants[refant]),bbox_inches='tight')
         # make outfile content
-        if Nquas>=3:
-            for j in range(len(t)):
-                count = count+1
-                content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
-                        count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
+        for j in range(len(t)):
+            count = count+1
+            content.append('{0:8.0f}{1:>20.15f}E-01{2:>15s}{3:>11d}{4:>11d}{5:>11d}{6:>11d}{7:>11f}E+00{8:>11.0f}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}{9:>11f}E+00{10:>11f}E+00{11:>11f}E+00{12:>11f}E+00{13:>11f}E+00{14:>11f}E+00{15:>11f}E+00{16:>11f}E+01{17:>11d}'.format(
+                    count,t[j]*10.0,'0.663757E-03',1,n,1,1,0,0,0,0,0,cos(lam[0][j]*pi/180.0),sin(lam[0][j]*pi/180.0),0,0,1.0,refant))
+    
+    # get header from target,TBOUT and replace values 
 
-    # get header from target,TBOUT and replace values
     start =  np.where(np.array(get_file('multiview/target.TBOUT'))=='***BEGIN*PASS***')[0][0]
     header = get_file('multiview/target.TBOUT')[:start+1]
     ender  = get_file('multiview/target.TBOUT')[-1]
@@ -6943,37 +6332,38 @@ if imultiv_flag==1:
     # print data to target.TBIN2 as SN 7
     outfile = 'multiview/target.TBIN2'
     if os.path.exists(outfile): os.remove(outfile)
-    if Nquas>=3:
-        outf = open(outfile,'a+')
-        for lin in header:
-            print >> outf, lin
-        outf.close()
-        outf = open(outfile,'a+')
-        for lin in content:
-            print >> outf, lin
-        outf.close()
-        outf = open(outfile,'a+')
-        print >> outf, ender
-        outf.close()
-    else:
-       os.system('cp multiview/target.TBIN multiview/target.TBIN2')
-
+    outf = open(outfile,'a+')
+    for lin in header:    
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    for lin in content: 
+        print >> outf, lin
+    outf.close()
+    outf = open(outfile,'a+')
+    print >> outf, ender
+    outf.close()
+    
     mprint('########################################################', logfile)
     mprint('MULTV2: Appears to have ended successfully',logfile)
     mprint('########################################################', logfile)
-
+    
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
 
+    mprint('##########################################', logfile)
+    mprint('MULTV2: Appears to have ended successfully',logfile)
+    mprint('##########################################', logfile)
+
 if imv_app_flag==1:
     if line!=cont:
         if line_data2.exists():
-            linedata = line_data2
+            linedata = line_data2 
         else: linedata = line_data
         linedata.clrstat()
         check_sncl(linedata, 5, 8,logfile)
-
+        
         replace('./multiview/target.TBIN2','nanE+00',"'INDE'  ")
         # SN6 + CL8 = CL9
         runtbin(linedata,'./multiview/target.TBIN')
@@ -6981,11 +6371,11 @@ if imv_app_flag==1:
         # SN7 + CL8 = CL10
         runtbin(linedata,'./multiview/target.TBIN2')
         runclcal(linedata,7,8,10,'',1,refant)
-
+    
     if line==cont:
         if cal_split.exists():
             check_sncl(cal_split,1,1,logfile)
-
+        
         replace('./multiview/target.TBIN2','nanE+00',"'INDE'  ")
         # SN2 + CL1 = CL2
         runtbin(cal_split,'./multiview/target.TBIN')
@@ -6993,17 +6383,17 @@ if imv_app_flag==1:
         # SN3 + CL1 = CL3
         runtbin(cal_split,'./multiview/target.TBIN2')
         runclcal(cal_split,3,1,3,'',1,refant)
-
+    
     mprint('######################',logfile)
     mprint(get_time(),logfile)
     mprint('######################',logfile)
-
+    
 if imv_imagr_flag==1:
     imna1  = '-1IMV'
     imna2  = '-2IMV'
 
     if line!=cont:
-        if line_data2.exists():
+        if line_data2.exists(): 
             linedata = line_data2
         else: linedata = line_data
         linedata.clrstat()
@@ -7040,7 +6430,7 @@ if imv_imagr_flag==1:
 
             if len(calsource)>8:
                 calname = calsource[:8]
-            else:
+            else: 
                 calname = calsource
 
             runimagr(cal_split,calname,niter,cellsize,imsize,1,imna1,antennas,
