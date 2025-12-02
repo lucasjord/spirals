@@ -2632,7 +2632,8 @@ def runimagr(indata,source,niter,cz,iz,docal,imna,antennas,uvwtfn,robust,beam,ba
     imagr              = AIPSTask('IMAGR')
     imagr.indata       = indata
     imagr.docal        = docal
-    imagr.sourc[1:]    = [source]
+    imagr.srcname      = source
+    #imagr.sourc[1:]    = [source]
     imagr.uvwtfn       = uvwtfn
     imagr.robust       = robust
     imagr.timer[1:]    = timer
@@ -2663,7 +2664,8 @@ def rungridimagr(indata,source,niter,cz,iz,docal,uvwtfn,robust,beam):
     imagr           = AIPSTask('IMAGR')
     imagr.indata    = indata
     imagr.docal     = docal
-    imagr.sourc[1:] = [source]
+    imagr.srcname      = source
+    #imagr.sourc[1:] = [source]
     imagr.uvwtfn       = uvwtfn
     imagr.robust       = robust
     imagr.bif       = 0
@@ -2705,7 +2707,8 @@ def runmaimagr(indata,source,niter,cz,iz,channel,docal,imna,uvwtfn,robust,beam,
 
     imagr.indata    = indata
     imagr.docal     = docal
-    imagr.sourc[1:] = [source]
+    imagr.srcname      = source
+    #imagr.sourc[1:] = [source]
     imagr.uvwtfn       = uvwtfn
     imagr.robust       = robust
     imagr.nchav     = 1
@@ -2740,7 +2743,8 @@ def runcube(indata,source,niter,cz,iz,bch, ech, docal, ant, uvwtfn, robust,beam)
 
     imagr.indata    = indata
     imagr.docal     = docal
-    imagr.sourc[1:] = [source]
+    imagr.srcname      = source
+    #imagr.sourc[1:] = [source]
     imagr.antennas[1:] = ant
     imagr.nchav     = 1
     imagr.bchan     = bch
@@ -5999,7 +6003,7 @@ if ma_fringe_flag==1 and line != cont:
         run_elvflag(cont_data,min_elv,logfile)
     runclcal(cont_data, 4, 7, 8, '', 1, refant)
     run_snplt(line_used, inter_flag)
-    run_snplt_diff(line_used, inter_flag)
+    #run_snplt_diff(line_used, inter_flag)
 
     mprint('######################',logfile)
     mprint(get_time(),logfile)
@@ -6016,7 +6020,7 @@ if co_fringe_flag==1 and line!=cont:
     #fringecal(cont_data,fr_image,nmaps,refant,calsource,solint,smodel,doband,bpver,dpfour)
     #runclcal(splatcal, 1, 1, 2, '', 1, refant)
     run_snplt(splatcal, inter_flag, inver=1)
-
+d
     if line_data2.exists():
         line_used=line_data2
     else:
