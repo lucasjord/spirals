@@ -358,14 +358,15 @@ def runTECOR(indata,year,doy,num_days,gainuse,TECU_model):
 # Download EOP file
 #
 def get_eop(eop_path):
-    if os.path.exists(eop_path+'usno_finals.erp'):
-        age = (time.time() - os.stat(eop_path+'usno_finals.erp')[8])/3600
-        mprint('usno_finals.erp exists, not downloaded.',logfile)
-    else:
-        os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp')   #wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp http://gemini.gsfc.nasa.gov/solve_save ftp://ftp.lbo.us/pub/staff/wbrisken/EOP
-        os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp')
-        os.popen(r'mv usno500_finals.erp '+eop_path+'usno_finals2.erp')
-        os.popen(r'mv usno_finals.erp '+eop_path+'usno_finals.erp')
+    #if os.path.exists(eop_path+'usno_finals.erp'):
+    #    age = (time.time() - os.stat(eop_path+'usno_finals.erp')[8])/3600
+    #    mprint('usno_finals.erp exists, not downloaded.',logfile)
+    #else:
+    # just always download 02/12/25
+    os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno_finals.erp')   #wget ftp://cddis.gsfc.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp http://gemini.gsfc.nasa.gov/solve_save ftp://ftp.lbo.us/pub/staff/wbrisken/EOP
+    os.popen(r'curl --insecure -O --ftp-ssl ftp://gdc.cddis.eosdis.nasa.gov/vlbi/gsfc/ancillary/solve_apriori/usno500_finals.erp')
+    os.popen(r'mv usno500_finals.erp '+eop_path+'usno_finals2.erp')
+    os.popen(r'mv usno_finals.erp '+eop_path+'usno_finals.erp')
 
 ##############################################################################
 #
@@ -513,6 +514,34 @@ def loadindx(filepath,filename,outname,outclass,
         mprint('#################',logfile)
     else:
         mprint('No!',logfile)
+
+def swap_pols(indata,ants):
+    outdata = indata
+    outdata.klass = 'SWPOL'
+    swpol = AIPSTask('swpol')
+    swpol.default()
+    swpol.indata  = indata
+    swpol.ants    = ants
+    swpol.outdata = indata
+    mprint('##################################',logfile)
+    mprint('Swapping pols for '+ants+'!',logfile)
+    mprint('##################################',logfile)
+    swpol()
+    if outdata.exists():
+        outdata.zap_table('AIPS CL',1)
+        runindxr(outdata)
+        mprint('#################',logfile)
+        mprint('Data new indexed!',logfile)
+        mprint('#################',logfile)
+    else:
+        mprint('No!',logfile)
+    if outdata.exists():
+        if indata.exists():
+            indata.clstat()
+            outdata.clrstat()
+            indata.zap()
+            outdata.rename(indata.name,indata.klass,indata.seq)
+
 
 def appendfgeo(filepath,filename,geo_data,cont_data,logfile):
     if os.path.exists(filepath+filename): mprint('File exists!',logfile)
@@ -4840,7 +4869,6 @@ def read_mail(mail_path, ou, op, of, inter_flag):
         pubfile_nr=[]
         kk=0
 
-
     for entry in content:
         if 'Proprietary File Dir :' in entry:
             prop_dir = entry.split(' ')[4].rstrip()
@@ -4855,7 +4883,6 @@ def read_mail(mail_path, ou, op, of, inter_flag):
             users.append(user)
             passs.append(passw)
             pubfiles.append(entry.split('/')[4].rstrip())
-
 
     if len(dates)>1:
         print 'Found VLA/VLBA archive emails from:'
@@ -5346,7 +5373,7 @@ if 'mv_app_flag' in locals() and globals(): pass
 else: mv_app_flag = 0
 if 'cheeky' in locals() and globals(): pass
 else: cheeky = False
-#
+# other parms
 if 'imgr_timer' in locals() and globals(): pass
 else: imgr_timer = [0,0,0,0,0,0,0,0]
 if 'apthree' in locals() and globals(): pass
@@ -5359,6 +5386,9 @@ if 'append_f2geo' in locals() and globals(): pass
 else: append_f2geo = 0
 if 'do_ddel_flag' in locals() and globals(): pass
 else: do_ddel_flag = 0
+if 'swpol_ant' in locals() and globals(): pass
+else: swpol_ant = []
+
 
 ##############################################################################
 # Start main script
@@ -5415,8 +5445,11 @@ if download_flag==1:
 
 if load_flag==1:
     for i in range(n):
+        dataout = AIPSUVData(outname[i],outclass[i],outdisk[i],1)
         loadindx(file_path,filename[i],outname[i],outclass[i],outdisk[i],
                  nfiles[i],ncount[i],doconcat[i],antname,logfile)
+        if swpol_ant!=[]:
+            swap_pols(dataout,swpol_ant)
 
 data = range(n)
 
@@ -5933,9 +5966,23 @@ cont_data  = data[cont]
 
 # touch-up delays with F source fringe-fit
 if do_ddel_flag==1:
-    check_sncl(pr_data, 3, 7,logfile)
+    check_sncl(cont_data, 3, 7,logfile)
+    check_sncl(line_data, 3, 7,logfile)
+    # get fringe sources
+    goodies = ['0537-441','1921-293','3C279','3C273','0208-512']
+    fr_sources = [s for s in SU.values() if "F" in s or s in goodies]
+    fsources = get_fsources(cont_data)
+    fr_sources = np.unique(fsources+known_goodies)
+    # fringe on the sources
+    fringecal()
+    # get the data to fit
+    sn_table = cont_data
+    # fit each baseline
 
-
+    # apply solutions to CL7 
+    for ant in cont_data.antennas:
+    apply_clock_rate(cont_data)
+    apply_clock_rate(line_data)
 
 line_data2 = AIPSUVData(line_data.name,line_data.klass,line_data.disk,2)
 cont_data2 = AIPSUVData(cont_data.name,cont_data.klass,cont_data.disk,2)
